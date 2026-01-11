@@ -53,7 +53,8 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
         contents: prompt,
       });
 
-      setInsight(response.text);
+      // Fixed: response.text is string | undefined, state is string | null
+      setInsight(response.text ?? "Intelligence stream returned empty data.");
     } catch (err) {
       setInsight("Security protocol failure: Intel synchronization interrupted. Retry strategy pulse.");
     } finally {
