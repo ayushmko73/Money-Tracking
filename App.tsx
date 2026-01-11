@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { storageService } from './services/storageService';
@@ -57,7 +56,7 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
         }
       }
     } catch (err) {
-      setError("Vault initialization failed. Retry.");
+      setError("Vault initialization failed. Check your Supabase connection.");
     } finally {
       setLoading(false);
     }
@@ -65,7 +64,7 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 md:p-6 font-['Inter']">
-      <div className="w-full max-md bg-white rounded-[2.5rem] md:rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-10 border border-white/10">
+      <div className="w-full max-w-md bg-white rounded-[2.5rem] md:rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-10 border border-white/10">
         <div className="text-center mb-10">
           <div className="w-20 h-20 bg-slate-900 rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-6 shadow-xl shadow-slate-900/30">
             <i className="fas fa-vault text-white text-3xl"></i>
@@ -92,7 +91,7 @@ const LogoutModal: React.FC<{ isOpen: boolean; onConfirm: () => void; onCancel: 
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-      <div className="w-full max-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-white/20 p-8 md:p-10 scale-in">
+      <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-white/20 p-8 md:p-10 scale-in">
         <div className="text-center">
           <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
             <i className="fas fa-power-off text-2xl"></i>
@@ -108,7 +107,7 @@ const LogoutModal: React.FC<{ isOpen: boolean; onConfirm: () => void; onCancel: 
   );
 };
 
-const Sidebar: React.FC<{ isOpen: boolean, onClose: () => void, user: User, onLogoutClick: () => void }> = ({ isOpen, onClose, user, onLogoutClick }) => {
+const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; user: User; onLogoutClick: () => void }> = ({ isOpen, onClose, user, onLogoutClick }) => {
   const location = useLocation();
   const isAdmin = user.email === ADMIN_EMAIL;
   const TIER_COLORS = { [VaultTier.COPPER]: 'from-orange-400 to-orange-600', [VaultTier.SILVER]: 'from-slate-300 to-slate-500', [VaultTier.GOLD]: 'from-amber-300 to-amber-600', [VaultTier.PLATINUM]: 'from-cyan-300 to-blue-500', [VaultTier.DIAMOND]: 'from-indigo-400 to-purple-600' };
@@ -156,7 +155,7 @@ const Sidebar: React.FC<{ isOpen: boolean, onClose: () => void, user: User, onLo
               </div>
             ))}
           </div>
-          <button onClick={onLogoutClick} className="mt-8 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-red-500/10 text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">Terminate Session</button>
+          <button onClick={onLogoutClick} className="mt-8 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-red-500/10 text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-50 hover:text-white transition-all">Terminate Session</button>
         </div>
       </div>
     </>
@@ -172,11 +171,31 @@ const App: React.FC = () => {
   const [formInitialType, setFormInitialType] = useState<TransactionType | undefined>(undefined);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
 
-  useEffect(() => { storageService.getSavedSession().then(u => { if (u) setCurrentUser(u); setLoading(false); }); }, []);
+  useEffect(() => { 
+    storageService.getSavedSession().then(u => { 
+      if (u) setCurrentUser(u); 
+      setLoading(false); 
+    }); 
+    
+    // Periodically check connection
+    const checkConn = async () => {
+      const ok = await storageService.checkConnection();
+      setIsConnected(ok);
+    };
+    checkConn();
+    const interval = setInterval(checkConn, 30000);
+    return () => clearInterval(interval);
+  }, []);
   
   const refreshData = async () => {
     if (!currentUser) return;
+    
+    // Re-verify connection on refresh
+    const ok = await storageService.checkConnection();
+    setIsConnected(ok);
+
     const [txs, allUsers] = await Promise.all([
       storageService.getTransactions(currentUser.email === ADMIN_EMAIL ? undefined : currentUser.id),
       storageService.getAllUsers()
@@ -192,9 +211,13 @@ const App: React.FC = () => {
 
   const handleAdd = async (tx: any) => { 
     if (!currentUser) return; 
-    await storageService.addTransaction(currentUser.id, tx); 
-    refreshData(); 
-    setShowForm(false); 
+    try {
+      await storageService.addTransaction(currentUser.id, tx); 
+      await refreshData(); 
+      setShowForm(false); 
+    } catch (err) {
+      alert("Storage Error: Local backup successful, but Cloud Sync failed. Verify your Supabase configuration.");
+    }
   };
   
   const triggerForm = (type?: TransactionType) => { setFormInitialType(type); setShowForm(true); };
@@ -244,7 +267,13 @@ const App: React.FC = () => {
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
         <div>
           <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter">Command Hub</h2>
-          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.2em] mt-3 bg-slate-100 inline-block px-3 py-1 rounded-full border border-slate-200">{currentUser.tier} ELITE STATUS • MASTER SESSION ACTIVE</p>
+          <div className="flex items-center gap-3 mt-3">
+             <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.2em] bg-slate-100 inline-block px-3 py-1 rounded-full border border-slate-200">{currentUser.tier} ELITE STATUS • MASTER SESSION ACTIVE</p>
+             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${isConnected ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+               <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+               {isConnected ? 'Sync Online' : 'Sync Offline'}
+             </div>
+          </div>
         </div>
         <button onClick={() => triggerForm()} className="w-full lg:w-auto bg-blue-600 text-white font-black px-10 py-5 rounded-[2rem] shadow-2xl shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-3">
           <i className="fas fa-plus-circle"></i> New Asset Entry

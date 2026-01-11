@@ -1,7 +1,49 @@
-
-import { User, Transaction, TransactionType, PaymentMethod, VaultTier, Goal, CustomCategory } from '../types';
+import { User, Transaction, TransactionType, VaultTier, Goal, CustomCategory } from '../types';
 import { supabase } from './supabaseClient';
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from '../constants';
+
+/**
+ * SQL SCHEMA SETUP (Run this in Supabase SQL Editor):
+ * 
+ * CREATE TABLE IF NOT EXISTS users (
+ *   id UUID PRIMARY KEY,
+ *   email TEXT UNIQUE NOT NULL,
+ *   name TEXT,
+ *   password TEXT,
+ *   coins INTEGER DEFAULT 0,
+ *   streak INTEGER DEFAULT 0,
+ *   "lastEntryDate" TIMESTAMPTZ,
+ *   "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+ *   tier TEXT
+ * );
+ * 
+ * CREATE TABLE IF NOT EXISTS transactions (
+ *   id UUID PRIMARY KEY,
+ *   "userId" UUID REFERENCES users(id),
+ *   amount NUMERIC NOT NULL,
+ *   type TEXT NOT NULL,
+ *   category TEXT,
+ *   "paymentMethod" TEXT,
+ *   note TEXT,
+ *   date TIMESTAMPTZ NOT NULL,
+ *   resolved BOOLEAN DEFAULT FALSE
+ * );
+ * 
+ * CREATE TABLE IF NOT EXISTS goals (
+ *   id UUID PRIMARY KEY,
+ *   "userId" UUID REFERENCES users(id),
+ *   name TEXT NOT NULL,
+ *   "targetAmount" NUMERIC NOT NULL,
+ *   "createdAt" TIMESTAMPTZ DEFAULT NOW()
+ * );
+ * 
+ * CREATE TABLE IF NOT EXISTS custom_categories (
+ *   id UUID PRIMARY KEY,
+ *   "userId" UUID REFERENCES users(id),
+ *   name TEXT NOT NULL,
+ *   type TEXT NOT NULL
+ * );
+ */
 
 const DB_KEY = 'FINTRACK_SOVEREIGN_MASTER_VAULT_PERMANENT';
 const SESSION_KEY = 'FINTRACK_SOVEREIGN_SESSION_PERMANENT';
@@ -32,9 +74,26 @@ const calculateTier = (coins: number): VaultTier => {
 };
 
 export const storageService = {
+  checkConnection: async (): Promise<boolean> => {
+    try {
+      const { error } = await supabase.from('users').select('id').limit(1);
+      if (error) {
+        if (error.code === '42P01') {
+          console.warn('Supabase Connection OK, but tables are missing. Please run the SQL schema setup.');
+          return true; // Connection works, schema is just missing
+        }
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   saveSession: (user: User) => {
     localStorage.setItem(SESSION_KEY, JSON.stringify({ email: user.email, ts: Date.now() }));
   },
+
   getSavedSession: async (): Promise<User | null> => {
     const sessionStr = localStorage.getItem(SESSION_KEY);
     if (!sessionStr) return null;
@@ -43,21 +102,24 @@ export const storageService = {
       return await storageService.getUserByEmail(email);
     } catch { return null; }
   },
+
   logout: () => {
     localStorage.removeItem(SESSION_KEY);
   },
+
   getUserByEmail: async (email: string): Promise<User | null> => {
     try {
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .eq('email', email)
-        .single();
+        .maybeSingle();
       
-      if (data && !error) {
-        return data as User;
-      }
-    } catch (e) { console.debug('Supabase sync failed, falling back to local.'); }
+      if (error) throw error;
+      if (data) return data as User;
+    } catch (e) { 
+      console.warn('Supabase fetch user failed:', e);
+    }
 
     const db = getLocalDB();
     let localUser = db.users.find(u => u.email === email) || null;
@@ -78,6 +140,7 @@ export const storageService = {
     }
     return localUser;
   },
+
   updateUser: async (userId: string, updates: Partial<User>): Promise<User | null> => {
     const db = getLocalDB();
     const userIdx = db.users.findIndex(u => u.id === userId);
@@ -91,11 +154,24 @@ export const storageService = {
     }
 
     try {
-      await supabase.from('users').upsert(updatedUser);
-    } catch (e) { console.debug('Cloud sync error during user update.'); }
+      await supabase.from('users').upsert({
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        password: updatedUser.password,
+        coins: updatedUser.coins,
+        streak: updatedUser.streak,
+        lastEntryDate: updatedUser.lastEntryDate,
+        createdAt: updatedUser.createdAt,
+        tier: updatedUser.tier
+      });
+    } catch (e) { 
+      console.error('Supabase update user sync failed:', e);
+    }
 
     return updatedUser;
   },
+
   createUser: async (email: string, name: string, password?: string): Promise<User> => {
     const newUser: User = {
       id: crypto.randomUUID(),
@@ -115,36 +191,41 @@ export const storageService = {
 
     try {
       await supabase.from('users').insert(newUser);
-    } catch (e) { console.debug('Cloud sync error during user creation.'); }
+    } catch (e) { 
+      console.error('Supabase create user sync failed:', e);
+    }
 
     return newUser;
   },
+
   getTransactions: async (userId?: string): Promise<Transaction[]> => {
-    if (userId) {
-      try {
-        const { data, error } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('userId', userId)
-          .order('date', { ascending: false });
-        
-        if (data && !error) return data as Transaction[];
-      } catch (e) { console.debug('Cloud transaction fetch failed.'); }
+    try {
+      let query = supabase.from('transactions').select('*').order('date', { ascending: false });
+      if (userId) query = query.eq('userId', userId);
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      if (data) return data as Transaction[];
+    } catch (e) { 
+      console.warn('Supabase fetch transactions failed:', e);
     }
 
     const db = getLocalDB();
-    return userId ? db.transactions.filter(t => t.userId === userId || t.userId === 'admin-hard-id') : db.transactions;
+    return userId ? db.transactions.filter(t => t.userId === userId) : db.transactions;
   },
+
   addTransaction: async (userId: string, tx: Omit<Transaction, 'id' | 'userId'>): Promise<Transaction> => {
     const newTx: Transaction = { ...tx, id: crypto.randomUUID(), userId, resolved: false };
     
     const db = getLocalDB();
     db.transactions.unshift(newTx);
+    
     const userIdx = db.users.findIndex(u => u.id === userId);
     if (userIdx !== -1) {
       const user = db.users[userIdx];
       const today = new Date().toISOString().split('T')[0];
       const lastDate = user.lastEntryDate?.split('T')[0];
+      
       user.coins += tx.type === TransactionType.SAVING ? 100 : 50;
       if (lastDate !== today) {
         const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
@@ -158,11 +239,15 @@ export const storageService = {
     saveLocalDB(db);
 
     try {
-      await supabase.from('transactions').insert(newTx);
-    } catch (e) { console.debug('Cloud transaction sync failed.'); }
+      const { error } = await supabase.from('transactions').insert(newTx);
+      if (error) throw error;
+    } catch (e) { 
+      console.error('Supabase add transaction sync failed:', e);
+    }
 
     return newTx;
   },
+
   toggleTransactionStatus: async (txId: string): Promise<void> => {
     const db = getLocalDB();
     const tx = db.transactions.find(t => t.id === txId);
@@ -171,14 +256,20 @@ export const storageService = {
       saveLocalDB(db);
       try {
         await supabase.from('transactions').update({ resolved: tx.resolved }).eq('id', txId);
-      } catch (e) {}
+      } catch (e) {
+        console.error('Supabase toggle status sync failed:', e);
+      }
     }
   },
+
   getAllUsers: async (): Promise<User[]> => {
     try {
-      const { data } = await supabase.from('users').select('*');
+      const { data, error } = await supabase.from('users').select('*');
+      if (error) throw error;
       if (data) return data.sort((a, b) => b.streak - a.streak || b.coins - a.coins) as User[];
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Supabase fetch all users failed:', e);
+    }
     return getLocalDB().users.sort((a, b) => b.streak - a.streak || b.coins - a.coins);
   },
 
@@ -190,12 +281,16 @@ export const storageService = {
         .eq('userId', userId)
         .order('createdAt', { ascending: false });
       
-      if (data && !error) return data as Goal[];
-    } catch (e) { console.debug('Cloud goals fetch failed.'); }
+      if (error) throw error;
+      if (data) return data as Goal[];
+    } catch (e) { 
+      console.warn('Supabase fetch goals failed:', e);
+    }
 
     const db = getLocalDB();
     return db.goals.filter(g => g.userId === userId);
   },
+
   addGoal: async (userId: string, name: string, targetAmount: number): Promise<Goal> => {
     const newGoal: Goal = {
       id: crypto.randomUUID(),
@@ -211,10 +306,13 @@ export const storageService = {
 
     try {
       await supabase.from('goals').insert(newGoal);
-    } catch (e) { console.debug('Cloud goal sync failed.'); }
+    } catch (e) {
+      console.error('Supabase add goal sync failed:', e);
+    }
 
     return newGoal;
   },
+
   deleteGoal: async (goalId: string): Promise<void> => {
     const db = getLocalDB();
     db.goals = db.goals.filter(g => g.id !== goalId);
@@ -222,10 +320,11 @@ export const storageService = {
 
     try {
       await supabase.from('goals').delete().eq('id', goalId);
-    } catch (e) {}
+    } catch (e) {
+      console.error('Supabase delete goal sync failed:', e);
+    }
   },
 
-  // Custom Category Management
   getCustomCategories: async (userId: string): Promise<CustomCategory[]> => {
     try {
       const { data, error } = await supabase
@@ -233,19 +332,18 @@ export const storageService = {
         .select('*')
         .eq('userId', userId);
       
-      if (data && !error) return data as CustomCategory[];
-    } catch (e) { console.debug('Cloud categories fetch failed.'); }
+      if (error) throw error;
+      if (data) return data as CustomCategory[];
+    } catch (e) {
+      console.warn('Supabase fetch categories failed:', e);
+    }
 
     const db = getLocalDB();
     return db.customCategories ? db.customCategories.filter(c => c.userId === userId) : [];
   },
+
   addCustomCategory: async (userId: string, name: string, type: TransactionType): Promise<CustomCategory> => {
-    const newCat: CustomCategory = {
-      id: crypto.randomUUID(),
-      userId,
-      name,
-      type
-    };
+    const newCat: CustomCategory = { id: crypto.randomUUID(), userId, name, type };
     const db = getLocalDB();
     if (!db.customCategories) db.customCategories = [];
     db.customCategories.push(newCat);
@@ -253,10 +351,13 @@ export const storageService = {
 
     try {
       await supabase.from('custom_categories').insert(newCat);
-    } catch (e) {}
+    } catch (e) {
+      console.error('Supabase add category sync failed:', e);
+    }
 
     return newCat;
   },
+
   deleteCustomCategory: async (id: string): Promise<void> => {
     const db = getLocalDB();
     if (db.customCategories) {
@@ -266,6 +367,8 @@ export const storageService = {
 
     try {
       await supabase.from('custom_categories').delete().eq('id', id);
-    } catch (e) {}
+    } catch (e) {
+      console.error('Supabase delete category sync failed:', e);
+    }
   }
 };
