@@ -16,14 +16,13 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
     setInsight(null);
     
     try {
-      // Access the standard API_KEY variable
+      // Access the injected API_KEY
       const key = process.env.API_KEY;
       
-      if (!key) {
-        throw new Error("API Key configuration missing in environment.");
+      if (!key || key === "undefined") {
+        throw new Error("API Key is undefined in the browser bundle.");
       }
 
-      // Initialize SDK right before usage
       const ai = new GoogleGenAI({ apiKey: key });
       
       const now = new Date();
@@ -61,14 +60,12 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
       });
 
       const text = response.text;
-      if (!text) throw new Error("Received an empty response from intelligence core.");
+      if (!text) throw new Error("Empty response from AI core.");
       
       setInsight(text);
     } catch (err: any) {
-      console.error("AI Error:", err);
-      // Detailed error message to help the user identify the issue
-      setInsight(`Strategic Link Failure: ${err?.message || 'Connection Interrupted'}. 
-      Ensure your Vercel Environment Variable is named exactly 'API_KEY' and that you have triggered a new deployment after saving the variable.`);
+      console.error("AI Strategic Error:", err);
+      setInsight(`Strategic Link Failure: The application could not find your 'API_KEY'. Please ensure you have added 'API_KEY' to Vercel environment variables AND redeployed the project to apply the new configuration.`);
     } finally {
       setLoading(false);
     }
