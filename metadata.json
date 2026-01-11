@@ -1,7 +1,5 @@
 {
-  "name": "FinTrack Pro - Smart Personal Finance",
-  "description": "A comprehensive personal finance tracker with gamified streaks, leaderboards, and AI-powered insights. Monitor income, expenses, debts, and savings with professional-grade analytics and an administrative growth dashboard.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "name": "FinTrack Sovereign - Elite Wealth Discipline",
+  "description": "A comprehensive personal finance tracker with gamified streaks, leaderboards, and AI-powered insights. Monitor income, expenses, debts, and savings with professional-grade analytics.",
+  "requestFramePermissions": []
 }

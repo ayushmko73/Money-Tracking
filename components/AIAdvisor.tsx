@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Transaction, User, TransactionType } from '../types';
@@ -15,7 +14,8 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
   const getStrategicBriefing = async () => {
     setLoading(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Use AI_KEY as per user's Vercel configuration
+      const ai = new GoogleGenAI({ apiKey: process.env.AI_KEY });
       const now = new Date();
       const currentMonth = now.getMonth();
       const currentYear = now.getFullYear();
@@ -53,10 +53,10 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
         contents: prompt,
       });
 
-      // Fixed: response.text is string | undefined, state is string | null
       setInsight(response.text ?? "Intelligence stream returned empty data.");
     } catch (err) {
-      setInsight("Security protocol failure: Intel synchronization interrupted. Retry strategy pulse.");
+      console.error("AI Error:", err);
+      setInsight("Security protocol failure: Intel synchronization interrupted. Ensure your Vercel Environment Variable is named 'AI_KEY'.");
     } finally {
       setLoading(false);
     }
