@@ -14,8 +14,11 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
   const getStrategicBriefing = async () => {
     setLoading(true);
     try {
-      // Use AI_KEY as per user's Vercel configuration
-      const ai = new GoogleGenAI({ apiKey: process.env.AI_KEY });
+      // Prioritize AI_KEY as requested for compatibility with your Vercel environment
+      // Using a type cast to ensure compatibility with process.env
+      const apiKey = (process.env.AI_KEY || process.env.API_KEY) as string;
+      const ai = new GoogleGenAI({ apiKey });
+      
       const now = new Date();
       const currentMonth = now.getMonth();
       const currentYear = now.getFullYear();
