@@ -14,11 +14,12 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
   const getStrategicBriefing = async () => {
     setLoading(true);
     try {
-      // Prioritize AI_KEY as requested for compatibility with your Vercel environment
-      // Using a type cast to ensure compatibility with process.env
-      const apiKey = (process.env.AI_KEY || process.env.API_KEY) as string;
-      const ai = new GoogleGenAI({ apiKey });
-      
+      // Exclusively use process.env.API_KEY as required by the platform
+      if (!process.env.API_KEY) {
+        throw new Error("API_KEY environment variable is missing.");
+      }
+
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const now = new Date();
       const currentMonth = now.getMonth();
       const currentYear = now.getFullYear();
@@ -57,9 +58,9 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
       });
 
       setInsight(response.text ?? "Intelligence stream returned empty data.");
-    } catch (err) {
+    } catch (err: any) {
       console.error("AI Error:", err);
-      setInsight("Security protocol failure: Intel synchronization interrupted. Ensure your Vercel Environment Variable is named 'AI_KEY'.");
+      setInsight(`System Error: Ensure your environment variable is named exactly 'API_KEY' in your Vercel project settings and trigger a new deployment.`);
     } finally {
       setLoading(false);
     }
