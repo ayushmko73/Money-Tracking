@@ -13,13 +13,19 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
 
   const getStrategicBriefing = async () => {
     setLoading(true);
+    setInsight(null);
+    
     try {
-      // Exclusively use process.env.API_KEY as required by the platform
-      if (!process.env.API_KEY) {
-        throw new Error("API_KEY environment variable is missing.");
+      // Access the standard API_KEY variable
+      const key = process.env.API_KEY;
+      
+      if (!key) {
+        throw new Error("API Key configuration missing in environment.");
       }
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Initialize SDK right before usage
+      const ai = new GoogleGenAI({ apiKey: key });
+      
       const now = new Date();
       const currentMonth = now.getMonth();
       const currentYear = now.getFullYear();
@@ -41,26 +47,28 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
         }, {} as Record<string, number>);
 
       const topCategory = (Object.entries(categories) as [string, number][]).sort((a, b) => b[1] - a[1])[0]?.[0] || 'General';
-      const txSummary = transactions.slice(0, 20).map(t => `${t.type}: ₹${t.amount} (${t.category})`).join(', ');
+      const txSummary = transactions.slice(0, 15).map(t => `${t.type}: ₹${t.amount} (${t.category})`).join(', ');
 
-      const prompt = `Act as an Elite FinTech Wealth Strategist. Analyze this user data:
-      - Identity: ${user.name} (Tier: ${user.tier})
-      - Monthly Spending: ₹${currentSpend.toLocaleString()}
-      - Top Expenditure: ${topCategory}
-      - Recent Ledger: ${txSummary}
-
-      Deliver a sharp briefing (50-80 words) in professional Indian Rupees (₹) context.
-      Tone: High intelligence, disciplined wealth management.`;
+      const prompt = `Act as a High-Level Financial Strategist for ${user.name} (Tier: ${user.tier}).
+      Analyze current monthly spend of ₹${currentSpend.toLocaleString()} with top category "${topCategory}".
+      Recent activity: ${txSummary}.
+      Provide a sharp, professional 2-3 sentence strategic advice focused on wealth growth and discipline. 
+      Use the ₹ symbol for currency.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
 
-      setInsight(response.text ?? "Intelligence stream returned empty data.");
+      const text = response.text;
+      if (!text) throw new Error("Received an empty response from intelligence core.");
+      
+      setInsight(text);
     } catch (err: any) {
       console.error("AI Error:", err);
-      setInsight(`System Error: Ensure your environment variable is named exactly 'API_KEY' in your Vercel project settings and trigger a new deployment.`);
+      // Detailed error message to help the user identify the issue
+      setInsight(`Strategic Link Failure: ${err?.message || 'Connection Interrupted'}. 
+      Ensure your Vercel Environment Variable is named exactly 'API_KEY' and that you have triggered a new deployment after saving the variable.`);
     } finally {
       setLoading(false);
     }
@@ -83,14 +91,16 @@ export const AIAdvisor: React.FC<AIAdvisorProps> = ({ user, transactions }) => {
           <button 
             onClick={getStrategicBriefing}
             disabled={loading}
-            className="w-full sm:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-xl"
+            className="w-full sm:w-auto px-8 py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl transition-all shadow-xl active:scale-95"
           >
             {loading ? <i className="fas fa-circle-notch fa-spin mr-2"></i> : <i className="fas fa-bolt-lightning mr-2"></i>}
             {loading ? 'CALCULATING...' : 'EXECUTE INTEL SYNC'}
           </button>
         </div>
+        
         {insight ? (
           <div className="bg-slate-950/50 border border-white/5 rounded-[2rem] p-8 text-slate-300 text-sm leading-relaxed animate-fade-in italic">
+            <i className="fas fa-quote-left text-blue-500/30 text-2xl absolute -top-2 -left-2"></i>
             {insight}
           </div>
         ) : (
