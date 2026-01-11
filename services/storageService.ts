@@ -2,49 +2,6 @@ import { User, Transaction, TransactionType, VaultTier, Goal, CustomCategory } f
 import { supabase } from './supabaseClient';
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from '../constants';
 
-/**
- * SQL SCHEMA SETUP (Run this in Supabase SQL Editor):
- * 
- * CREATE TABLE IF NOT EXISTS users (
- *   id UUID PRIMARY KEY,
- *   email TEXT UNIQUE NOT NULL,
- *   name TEXT,
- *   password TEXT,
- *   coins INTEGER DEFAULT 0,
- *   streak INTEGER DEFAULT 0,
- *   "lastEntryDate" TIMESTAMPTZ,
- *   "createdAt" TIMESTAMPTZ DEFAULT NOW(),
- *   tier TEXT
- * );
- * 
- * CREATE TABLE IF NOT EXISTS transactions (
- *   id UUID PRIMARY KEY,
- *   "userId" UUID REFERENCES users(id),
- *   amount NUMERIC NOT NULL,
- *   type TEXT NOT NULL,
- *   category TEXT,
- *   "paymentMethod" TEXT,
- *   note TEXT,
- *   date TIMESTAMPTZ NOT NULL,
- *   resolved BOOLEAN DEFAULT FALSE
- * );
- * 
- * CREATE TABLE IF NOT EXISTS goals (
- *   id UUID PRIMARY KEY,
- *   "userId" UUID REFERENCES users(id),
- *   name TEXT NOT NULL,
- *   "targetAmount" NUMERIC NOT NULL,
- *   "createdAt" TIMESTAMPTZ DEFAULT NOW()
- * );
- * 
- * CREATE TABLE IF NOT EXISTS custom_categories (
- *   id UUID PRIMARY KEY,
- *   "userId" UUID REFERENCES users(id),
- *   name TEXT NOT NULL,
- *   type TEXT NOT NULL
- * );
- */
-
 const DB_KEY = 'FINTRACK_SOVEREIGN_MASTER_VAULT_PERMANENT';
 const SESSION_KEY = 'FINTRACK_SOVEREIGN_SESSION_PERMANENT';
 
@@ -77,14 +34,7 @@ export const storageService = {
   checkConnection: async (): Promise<boolean> => {
     try {
       const { error } = await supabase.from('users').select('id').limit(1);
-      if (error) {
-        if (error.code === '42P01') {
-          console.warn('Supabase Connection OK, but tables are missing. Please run the SQL schema setup.');
-          return true; // Connection works, schema is just missing
-        }
-        return false;
-      }
-      return true;
+      return !error;
     } catch {
       return false;
     }
@@ -118,7 +68,7 @@ export const storageService = {
       if (error) throw error;
       if (data) return data as User;
     } catch (e) { 
-      console.warn('Supabase fetch user failed:', e);
+      console.warn('Supabase fetch user failed, using local fallback:', e);
     }
 
     const db = getLocalDB();
@@ -145,8 +95,11 @@ export const storageService = {
     const db = getLocalDB();
     const userIdx = db.users.findIndex(u => u.id === userId);
     const currentUser = userIdx !== -1 ? db.users[userIdx] : null;
+    
+    if (!currentUser && userId !== 'admin-hard-id') return null;
+
     const currentCoins = updates.coins !== undefined ? updates.coins : (currentUser?.coins || 0);
-    const updatedUser = { ...(currentUser || {}), ...updates, tier: calculateTier(currentCoins) } as User;
+    const updatedUser = { ...(currentUser || {}), ...updates, id: userId, tier: calculateTier(currentCoins) } as User;
     
     if (userIdx !== -1) {
       db.users[userIdx] = updatedUser;
@@ -166,7 +119,7 @@ export const storageService = {
         tier: updatedUser.tier
       });
     } catch (e) { 
-      console.error('Supabase update user sync failed:', e);
+      console.error('Supabase sync failed for user update:', e);
     }
 
     return updatedUser;
@@ -205,9 +158,22 @@ export const storageService = {
       
       const { data, error } = await query;
       if (error) throw error;
-      if (data) return data as Transaction[];
+      if (data) {
+        // Refresh local cache with Supabase data
+        const db = getLocalDB();
+        if (userId) {
+          db.transactions = [
+            ...db.transactions.filter(t => t.userId !== userId),
+            ...(data as Transaction[])
+          ];
+        } else {
+          db.transactions = data as Transaction[];
+        }
+        saveLocalDB(db);
+        return data as Transaction[];
+      }
     } catch (e) { 
-      console.warn('Supabase fetch transactions failed:', e);
+      console.warn('Supabase fetch transactions failed, using local cache:', e);
     }
 
     const db = getLocalDB();
@@ -234,15 +200,35 @@ export const storageService = {
       }
       user.tier = calculateTier(user.coins);
       
-      try { await supabase.from('users').upsert(user); } catch(e) {}
+      try { 
+        await supabase.from('users').upsert({
+          id: user.id,
+          coins: user.coins,
+          streak: user.streak,
+          lastEntryDate: user.lastEntryDate,
+          tier: user.tier
+        }); 
+      } catch(e) {
+        console.error('User stats sync failed during transaction add:', e);
+      }
     }
     saveLocalDB(db);
 
     try {
-      const { error } = await supabase.from('transactions').insert(newTx);
+      const { error } = await supabase.from('transactions').insert({
+        id: newTx.id,
+        userId: newTx.userId,
+        amount: newTx.amount,
+        type: newTx.type,
+        category: newTx.category,
+        paymentMethod: newTx.paymentMethod,
+        note: newTx.note,
+        date: newTx.date,
+        resolved: newTx.resolved
+      });
       if (error) throw error;
     } catch (e) { 
-      console.error('Supabase add transaction sync failed:', e);
+      console.error('Supabase transaction insert failed:', e);
     }
 
     return newTx;
@@ -305,7 +291,13 @@ export const storageService = {
     saveLocalDB(db);
 
     try {
-      await supabase.from('goals').insert(newGoal);
+      await supabase.from('goals').insert({
+        id: newGoal.id,
+        userId: newGoal.userId,
+        name: newGoal.name,
+        targetAmount: newGoal.targetAmount,
+        createdAt: newGoal.createdAt
+      });
     } catch (e) {
       console.error('Supabase add goal sync failed:', e);
     }
@@ -350,7 +342,12 @@ export const storageService = {
     saveLocalDB(db);
 
     try {
-      await supabase.from('custom_categories').insert(newCat);
+      await supabase.from('custom_categories').insert({
+        id: newCat.id,
+        userId: newCat.userId,
+        name: newCat.name,
+        type: newCat.type
+      });
     } catch (e) {
       console.error('Supabase add category sync failed:', e);
     }

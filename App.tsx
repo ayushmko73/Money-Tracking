@@ -9,7 +9,7 @@ import { AdminPanel } from './components/AdminPanel';
 import { Donation } from './components/Donation';
 import { Profile } from './components/Profile';
 import { Leaderboard } from './components/Leaderboard';
-import { AIAdvisor } from './components/AIAdvisor';
+import { AIChat } from './components/AIChat';
 import { DebtControl } from './components/DebtControl';
 import { SavingsMission } from './components/SavingsMission';
 import { CreditAnalysis } from './components/CreditAnalysis';
@@ -56,7 +56,7 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
         }
       }
     } catch (err) {
-      setError("Vault initialization failed. Check your Supabase connection.");
+      setError("Vault initialization failed. Check your configuration.");
     } finally {
       setLoading(false);
     }
@@ -64,7 +64,7 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 md:p-6 font-['Inter']">
-      <div className="w-full max-w-md bg-white rounded-[2.5rem] md:rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-10 border border-white/10">
+      <div className="w-full max-w-md bg-white rounded-[2.5rem] md:rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-10 border border-white/10 animate-fade-in">
         <div className="text-center mb-10">
           <div className="w-20 h-20 bg-slate-900 rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-6 shadow-xl shadow-slate-900/30">
             <i className="fas fa-vault text-white text-3xl"></i>
@@ -90,7 +90,7 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
 const LogoutModal: React.FC<{ isOpen: boolean; onConfirm: () => void; onCancel: () => void }> = ({ isOpen, onConfirm, onCancel }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-md animate-fade-in">
+    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-md animate-fade-in">
       <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-white/20 p-8 md:p-10 scale-in">
         <div className="text-center">
           <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
@@ -155,7 +155,7 @@ const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; user: User; onLo
               </div>
             ))}
           </div>
-          <button onClick={onLogoutClick} className="mt-8 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-red-500/10 text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-50 hover:text-white transition-all">Terminate Session</button>
+          <button onClick={onLogoutClick} className="mt-8 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-red-500/10 text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">Terminate Session</button>
         </div>
       </div>
     </>
@@ -179,7 +179,6 @@ const App: React.FC = () => {
       setLoading(false); 
     }); 
     
-    // Periodically check connection
     const checkConn = async () => {
       const ok = await storageService.checkConnection();
       setIsConnected(ok);
@@ -191,8 +190,6 @@ const App: React.FC = () => {
   
   const refreshData = async () => {
     if (!currentUser) return;
-    
-    // Re-verify connection on refresh
     const ok = await storageService.checkConnection();
     setIsConnected(ok);
 
@@ -211,90 +208,57 @@ const App: React.FC = () => {
 
   const handleAdd = async (tx: any) => { 
     if (!currentUser) return; 
-    try {
-      await storageService.addTransaction(currentUser.id, tx); 
-      await refreshData(); 
-      setShowForm(false); 
-    } catch (err) {
-      alert("Storage Error: Local backup successful, but Cloud Sync failed. Verify your Supabase configuration.");
-    }
+    await storageService.addTransaction(currentUser.id, tx); 
+    await refreshData(); 
+    setShowForm(false); 
   };
   
   const triggerForm = (type?: TransactionType) => { setFormInitialType(type); setShowForm(true); };
 
   const { netBalance, channelBalances } = useMemo(() => {
-    const balances = {
-      [PaymentMethod.SAVING]: 0,
-      [PaymentMethod.ONLINE]: 0,
-      [PaymentMethod.WALLET]: 0
-    };
-
+    const balances = { [PaymentMethod.SAVING]: 0, [PaymentMethod.ONLINE]: 0, [PaymentMethod.WALLET]: 0 };
     transactions.forEach(t => {
       let delta = 0;
-      switch (t.type) {
-        case TransactionType.INCOME: delta = t.amount; break;
-        case TransactionType.EXPENSE: delta = -t.amount; break;
-        case TransactionType.SAVING: delta = -t.amount; break;
-        case TransactionType.CREDIT: 
-          delta = t.resolved ? 0 : -t.amount; 
-          break;
-        case TransactionType.DEBT:
-          delta = t.resolved ? 0 : t.amount;
-          break;
-      }
-      if (t.paymentMethod in balances) {
-        balances[t.paymentMethod as keyof typeof balances] += delta;
-      }
+      if (t.type === TransactionType.INCOME) delta = t.amount;
+      else if (t.type === TransactionType.EXPENSE || t.type === TransactionType.SAVING) delta = -t.amount;
+      else if (t.type === TransactionType.CREDIT) delta = t.resolved ? 0 : -t.amount;
+      else if (t.type === TransactionType.DEBT) delta = t.resolved ? 0 : t.amount;
+      if (t.paymentMethod in balances) balances[t.paymentMethod as keyof typeof balances] += delta;
     });
-
-    const total = Object.values(balances).reduce((a, b) => a + b, 0);
-    return { netBalance: total, channelBalances: balances };
+    return { netBalance: Object.values(balances).reduce((a, b) => a + b, 0), channelBalances: balances };
   }, [transactions]);
 
-  const TYPE_ICONS = {
-    [TransactionType.INCOME]: 'fa-arrow-trend-up',
-    [TransactionType.EXPENSE]: 'fa-receipt',
-    [TransactionType.CREDIT]: 'fa-indian-rupee-sign',
-    [TransactionType.DEBT]: 'fa-user-clock',
-    [TransactionType.SAVING]: 'fa-vault'
-  };
-
-  if (loading) return <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white p-10"><div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div><p className="font-black text-[10px] tracking-[0.5em] uppercase animate-pulse">Synchronizing Vectors</p></div>;
+  if (loading) return <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white"><div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div><p className="font-black text-[10px] tracking-[0.5em] uppercase">Synchronizing Vectors</p></div>;
   if (!currentUser) return <Auth onLogin={setCurrentUser} />;
 
   const DashboardHub = (
-    <div className="space-y-12 pb-24">
+    <div className="space-y-12 pb-24 animate-fade-in">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
         <div>
           <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter">Command Hub</h2>
           <div className="flex items-center gap-3 mt-3">
-             <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.2em] bg-slate-100 inline-block px-3 py-1 rounded-full border border-slate-200">{currentUser.tier} ELITE STATUS • MASTER SESSION ACTIVE</p>
+             <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.2em] bg-slate-100 px-3 py-1 rounded-full border border-slate-200">{currentUser.tier} ELITE STATUS</p>
              <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${isConnected ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
                <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
                {isConnected ? 'Sync Online' : 'Sync Offline'}
              </div>
           </div>
         </div>
-        <button onClick={() => triggerForm()} className="w-full lg:w-auto bg-blue-600 text-white font-black px-10 py-5 rounded-[2rem] shadow-2xl shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-3">
+        <button onClick={() => triggerForm()} className="w-full lg:w-auto bg-blue-600 text-white font-black px-10 py-5 rounded-[2rem] shadow-2xl hover:bg-blue-700 active:scale-95 transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-3">
           <i className="fas fa-plus-circle"></i> New Asset Entry
         </button>
       </div>
       
-      <AIAdvisor user={currentUser} transactions={transactions} />
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-xl transition-all">
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity"><i className="fas fa-wallet text-6xl"></i></div>
           <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Net Liquidity</p>
           <h3 className="text-3xl font-black text-slate-900 tracking-tight">₹{netBalance.toLocaleString()}</h3>
         </div>
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-xl transition-all">
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity"><i className="fas fa-bolt text-6xl"></i></div>
           <p className="text-orange-500 text-[10px] font-black uppercase tracking-widest mb-3">Discipline Streak</p>
           <h3 className="text-3xl font-black text-slate-900 tracking-tight">{currentUser.streak} Days</h3>
         </div>
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-xl transition-all">
-          <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity"><i className="fas fa-coins text-6xl"></i></div>
           <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest mb-3">Vault Coins</p>
           <h3 className="text-3xl font-black text-slate-900 tracking-tight">{currentUser.coins.toLocaleString()}</h3>
         </div>
@@ -302,77 +266,24 @@ const App: React.FC = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {Object.entries(channelBalances).map(([method, bal]) => (
-          <div key={method} className="bg-slate-900 p-6 rounded-3xl border border-white/5 flex justify-between items-center group hover:bg-slate-800 transition-all cursor-default">
+          <div key={method} className="bg-slate-900 p-6 rounded-3xl border border-white/5 flex justify-between items-center group hover:bg-slate-800 transition-all">
             <div>
               <p className="text-blue-400 text-[8px] font-black uppercase tracking-widest mb-1">{method} Channel</p>
               <p className="text-xl font-black text-white">₹{bal.toLocaleString()}</p>
             </div>
-            <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
-               <i className={`fas ${method === 'SAVING' ? 'fa-vault' : method === 'ONLINE' ? 'fa-globe' : 'fa-wallet'} text-xs`}></i>
-            </div>
+            <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-blue-400"><i className={`fas ${method === PaymentMethod.ONLINE ? 'fa-globe' : method === PaymentMethod.SAVING ? 'fa-piggy-bank' : 'fa-wallet'}`}></i></div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-100">
-          <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-10 border-l-4 border-blue-600 pl-4">Wealth Projection</h4>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white p-8 md:p-10 rounded-[3rem] shadow-sm border border-slate-100">
+          <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">Asset Flow Matrix</h4>
           <DailyTrend transactions={transactions} />
         </div>
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-100">
-          <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-10 border-l-4 border-emerald-500 pl-4">Asset Allocation</h4>
+        <div className="bg-white p-8 md:p-10 rounded-[3rem] shadow-sm border border-slate-100">
+          <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">Category Distribution</h4>
           <CategoryPie transactions={transactions} />
-        </div>
-      </div>
-
-      <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
-        <div className="flex justify-between items-center mb-10">
-          <h4 className="text-xs font-black text-slate-900 uppercase tracking-[0.3em]">Recent Sovereign Activity</h4>
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-3 py-1 bg-slate-50 rounded-full">Ledger Synchronized</span>
-        </div>
-        <div className="space-y-4">
-          {transactions.slice(0, 10).map((tx) => (
-            <div key={tx.id} className="group p-6 bg-slate-50 hover:bg-white border border-transparent hover:border-slate-100 rounded-3xl flex justify-between items-center transition-all hover:shadow-xl hover:-translate-y-1">
-              <div className="flex items-center gap-6">
-                <div 
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg transition-transform group-hover:scale-110"
-                  style={{ backgroundColor: COLORS[tx.type] }}
-                >
-                  <i className={`fas ${TYPE_ICONS[tx.type]} text-xs`}></i>
-                </div>
-                <div>
-                  <div className="flex items-center gap-3">
-                    <p className="font-black text-slate-900 text-lg leading-none">{tx.category}</p>
-                    {tx.resolved && (
-                      <span className="bg-emerald-50 text-emerald-600 text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-lg">Settled</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 mt-2">
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                      {new Date(tx.date).toLocaleDateString(undefined, { day: '2-digit', month: 'short' })}
-                    </p>
-                    <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                    <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest">{tx.paymentMethod}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <p 
-                  className="text-xl font-black tracking-tight transition-colors"
-                  style={{ color: (tx.type === TransactionType.INCOME || (tx.type === TransactionType.CREDIT && tx.resolved)) ? '#10b981' : '#1e293b' }}
-                >
-                  {(tx.type === TransactionType.INCOME || (tx.type === TransactionType.DEBT && !tx.resolved)) ? '+' : '-'}₹{tx.amount.toLocaleString()}
-                </p>
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1 group-hover:text-blue-500 transition-colors">Transaction Vector</p>
-              </div>
-            </div>
-          ))}
-          {transactions.length === 0 && (
-            <div className="py-20 text-center border-2 border-dashed border-slate-100 rounded-[2.5rem] bg-slate-50/50">
-               <i className="fas fa-receipt text-4xl text-slate-200 mb-4 animate-pulse"></i>
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">No Activity Logged in Vault</p>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -380,44 +291,50 @@ const App: React.FC = () => {
 
   return (
     <Router>
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={currentUser} onLogoutClick={() => setShowLogoutConfirm(true)} />
-      <div className="min-h-screen bg-slate-50">
-        <nav className="glass-effect border-b border-slate-100 sticky top-0 z-[150] h-20 flex justify-between items-center px-6">
-          <div className="max-w-7xl mx-auto w-full flex justify-between items-center">
-            <button onClick={() => setIsSidebarOpen(true)} className="w-12 h-12 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-xl active:scale-95 transition-all"><i className="fas fa-bars-staggered"></i></button>
-            <Link to="/" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg group-hover:rotate-12 transition-all">
-                <i className="fas fa-shield-halved"></i>
-              </div>
-              <span className="font-black text-slate-900 text-xl tracking-tighter hidden sm:inline group-hover:text-blue-600 transition-colors">FinTrack</span>
-            </Link>
-            <Link to="/profile" className="flex items-center gap-3 group">
-              <div className="text-right hidden sm:block">
-                <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest">{currentUser.streak}🔥 Streak</p>
-                <p className="text-sm font-black text-slate-900 group-hover:text-blue-600 transition-colors">{currentUser.name}</p>
-              </div>
-              <div className="w-11 h-11 rounded-2xl bg-slate-900 flex items-center justify-center text-white text-sm font-black shadow-xl group-hover:bg-blue-600 transition-all border-2 border-transparent group-hover:border-white">{currentUser.name[0]}</div>
-            </Link>
+      <div className="min-h-screen bg-slate-50 flex flex-col">
+        <nav className="glass-effect sticky top-4 mx-4 md:mx-10 z-[300] p-4 md:p-6 rounded-[2.5rem] flex justify-between items-center shadow-lg border-white/40 mb-10">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setIsSidebarOpen(true)} className="w-12 h-12 rounded-2xl bg-slate-900 text-white hover:bg-black transition-all shadow-xl active:scale-90 flex items-center justify-center"><i className="fas fa-bars"></i></button>
+            <Link to="/" className="text-xl md:text-2xl font-black tracking-tighter text-slate-900 hidden sm:block">FINTRACK <span className="text-blue-600">SOVEREIGN</span></Link>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link to="/profile" className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-600 hover:text-white transition-all shadow-inner"><i className="fas fa-user"></i></Link>
           </div>
         </nav>
-        <main className="max-w-7xl mx-auto px-6 py-12">
+
+        <main className="flex-1 px-4 md:px-10 max-w-[1600px] mx-auto w-full">
           <Routes>
             <Route path="/" element={DashboardHub} />
-            <Route path="/debt" element={<DebtControl transactions={transactions} onAddRequest={triggerForm} onRefresh={refreshData} />} />
-            <Route path="/credit" element={<CreditAnalysis transactions={transactions} onAddRequest={triggerForm} onRefresh={refreshData} />} />
-            <Route path="/savings" element={<SavingsMission transactions={transactions} onAddRequest={triggerForm} userId={currentUser.id} />} />
             <Route path="/history" element={<TransactionHistory transactions={transactions} />} />
-            <Route path="/categories" element={<CategoryManager userId={currentUser.id} />} />
+            <Route path="/credit" element={<CreditAnalysis transactions={transactions} onAddRequest={triggerForm} onRefresh={refreshData} />} />
+            <Route path="/debt" element={<DebtControl transactions={transactions} onAddRequest={triggerForm} onRefresh={refreshData} />} />
+            <Route path="/savings" element={<SavingsMission transactions={transactions} onAddRequest={triggerForm} userId={currentUser.id} />} />
             <Route path="/leaderboard" element={<Leaderboard users={users} currentUser={currentUser} />} />
             <Route path="/profile" element={<Profile user={currentUser} transactions={transactions} onUpdate={setCurrentUser} />} />
-            <Route path="/admin" element={currentUser.email === ADMIN_EMAIL ? <AdminPanel users={users} transactions={transactions} /> : <Navigate to="/" />} />
             <Route path="/support" element={<Donation />} />
+            <Route path="/categories" element={<CategoryManager userId={currentUser.id} />} />
+            {currentUser.email === ADMIN_EMAIL && <Route path="/admin" element={<AdminPanel users={users} transactions={transactions} />} />}
+            <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
-        {showForm && <TransactionForm onAdd={handleAdd} onClose={() => setShowForm(false)} initialType={formInitialType} userId={currentUser.id} />}
-        <LogoutModal isOpen={showLogoutConfirm} onConfirm={() => { storageService.logout(); setCurrentUser(null); setShowLogoutConfirm(false); }} onCancel={() => setShowLogoutConfirm(false)} />
+
+        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={currentUser} onLogoutClick={() => setShowLogoutConfirm(true)} />
+        <LogoutModal isOpen={showLogoutConfirm} onConfirm={() => { storageService.logout(); window.location.reload(); }} onCancel={() => setShowLogoutConfirm(false)} />
+        
+        {showForm && (
+          <TransactionForm 
+            userId={currentUser.id} 
+            onAdd={handleAdd} 
+            onClose={() => setShowForm(false)} 
+            initialType={formInitialType} 
+          />
+        )}
+        
+        {/* New Floating AI Chat Component */}
+        <AIChat user={currentUser} transactions={transactions} />
       </div>
     </Router>
   );
 };
+
 export default App;
