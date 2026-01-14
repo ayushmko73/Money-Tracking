@@ -1,19 +1,19 @@
 
-import { TransactionType, PaymentMethod } from './types';
+import { TransactionType } from './types';
 
 export const CATEGORIES = {
-  [TransactionType.INCOME]: [],
-  [TransactionType.EXPENSE]: [],
-  [TransactionType.CREDIT]: [],
-  [TransactionType.DEBT]: [],
-  [TransactionType.SAVING]: []
+  [TransactionType.INCOME]: ['Salary', 'Freelance', 'Dividends', 'Gift', 'Rental', 'Bonus', 'Tax Refund'],
+  [TransactionType.EXPENSE]: ['Dining', 'Rent', 'Groceries', 'Transport', 'Utilities', 'Healthcare', 'Entertainment', 'Shopping', 'Travel', 'Education', 'Subscriptions'],
+  [TransactionType.CREDIT]: ['Personal Loan', 'Business Credit', 'Advance Payment', 'Inter-account Transfer'],
+  [TransactionType.DEBT]: ['Credit Card', 'Personal Debt', 'Mortgage', 'Student Loan', 'EMI'],
+  [TransactionType.SAVING]: ['Emergency Fund', 'Retirement', 'Investment', 'Vacation fund', 'Property']
 };
 
 export const COLORS = {
   [TransactionType.INCOME]: '#10b981', // emerald-500
   [TransactionType.EXPENSE]: '#ef4444', // red-500
   [TransactionType.CREDIT]: '#3b82f6', // blue-500
-  [TransactionType.DEBT]: '#f59e0b', // amber-500
+  [TransactionType.DEBT]: '#f97316', // orange-500
   [TransactionType.SAVING]: '#8b5cf6', // violet-500
 };
 

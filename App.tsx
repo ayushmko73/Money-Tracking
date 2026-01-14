@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import { storageService } from './services/storageService';
-import { User, Transaction, TransactionType, VaultTier, PaymentMethod } from './types';
-import { ADMIN_EMAIL, ADMIN_PASSWORD, COLORS } from './constants';
-import { DailyTrend, CategoryPie } from './components/Charts';
+import { audioService } from './services/audioService';
+import { User, Transaction, TransactionType, SovereignEvent } from './types';
+import { ADMIN_EMAIL, ADMIN_PASSWORD } from './constants';
+import { DailyTrend, TopSpendingChart } from './components/Charts';
 import { TransactionForm } from './components/TransactionForm';
 import { AdminPanel } from './components/AdminPanel';
 import { Donation } from './components/Donation';
@@ -13,151 +14,214 @@ import { AIChat } from './components/AIChat';
 import { DebtControl } from './components/DebtControl';
 import { SavingsMission } from './components/SavingsMission';
 import { CreditAnalysis } from './components/CreditAnalysis';
+import { BudgetCenter } from './components/BudgetCenter';
 import { TransactionHistory } from './components/TransactionHistory';
-import { CategoryManager } from './components/CategoryManager';
+import { EventOverlay } from './components/EventOverlay';
 
-// --- Auth Component ---
 const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [age, setAge] = useState('');
+  const [gender, setGender] = useState('');
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const VERIFIED_DOMAINS = ['@gmail.com', '@outlook.com', '@icloud.com', '@proton.me', '@yahoo.com'];
+
+  const isEmailValid = useMemo(() => {
+    const regex = /^[a-zA-Z0-9._%+-]+@(gmail|outlook|hotmail|yahoo|icloud|protonmail|me|proton)\.(com|me)$/;
+    return regex.test(email.toLowerCase());
+  }, [email]);
+
+  const isPasswordValid = useMemo(() => {
+    return password.length >= 6;
+  }, [password]);
+
+  const canRegister = useMemo(() => {
+    return isEmailValid && isPasswordValid && name.trim().length >= 3;
+  }, [isEmailValid, isPasswordValid, name]);
+
+  const handleDomainSelect = (domain: string) => {
+    audioService.playClick();
+    const currentVal = email.split('@')[0];
+    setEmail(currentVal + domain);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    audioService.playClick();
     setLoading(true);
     setError('');
-
+    const targetEmail = email.trim().toLowerCase();
     try {
-      if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+      if (targetEmail === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
         const adminUser = await storageService.getUserByEmail(ADMIN_EMAIL);
         if (adminUser) {
           storageService.saveSession(adminUser);
+          audioService.playSuccess();
           onLogin(adminUser);
           return;
         }
       }
-      const user = await storageService.getUserByEmail(email);
+      const user = await storageService.getUserByEmail(targetEmail);
       if (isRegister) {
-        if (user) setError('Email already registered.');
-        else {
-          const newUser = await storageService.createUser(email, name || email.split('@')[0], password);
+        if (!isEmailValid) {
+          setError('Restricted Identity Vector. Please use a verified domain (Gmail/Outlook).');
+          setLoading(false);
+          return;
+        }
+        if (!isPasswordValid) {
+          setError('Security Constraint: Access Key must be at least 6 characters.');
+          setLoading(false);
+          return;
+        }
+        if (user) {
+          setError('Identity vector already exists in the registry.');
+        } else {
+          const parsedAge = age ? parseInt(age) : undefined;
+          const newUser = await storageService.createUser(
+            targetEmail, 
+            name.trim() || targetEmail.split('@')[0], 
+            password,
+            isNaN(parsedAge as any) ? undefined : parsedAge,
+            gender || undefined
+          );
           storageService.saveSession(newUser);
+          audioService.playSuccess();
           onLogin(newUser);
         }
       } else {
-        if (!user) setError('No account found.');
-        else if (user.password && user.password !== password) setError('Incorrect password.');
-        else {
+        if (!user) {
+          setError('Vault access denied. Identity not found.');
+        } else if (user.password && user.password !== password) {
+          setError('Invalid Access Key authorization.');
+        } else {
           storageService.saveSession(user);
+          audioService.playSuccess();
           onLogin(user);
         }
       }
-    } catch (err) {
-      setError("Vault initialization failed. Check your configuration.");
+    } catch (err: any) {
+      setError(err.message || "Terminal Sync Failed.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 md:p-6 font-['Inter']">
-      <div className="w-full max-w-md bg-white rounded-[2.5rem] md:rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-10 border border-white/10 animate-fade-in">
+    <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4 font-['Inter'] relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px] -mr-48 -mt-48"></div>
+      <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-[120px] -ml-48 -mb-48"></div>
+      <div className="w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-12 border border-slate-100 relative z-10">
         <div className="text-center mb-10">
-          <div className="w-20 h-20 bg-slate-900 rounded-3xl flex items-center justify-center mx-auto mb-6 rotate-6 shadow-xl shadow-slate-900/30">
-            <i className="fas fa-vault text-white text-3xl"></i>
+          <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl transform rotate-3">
+            <i className="fas fa-shield-halved text-white text-2xl"></i>
           </div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">FinTrack Sovereign</h1>
-          <p className="text-blue-600 mt-2 font-black uppercase text-[9px] tracking-[0.3em]">Advanced Wealth Discipline Terminal</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tighter uppercase leading-none">SOVEREIGN <span className="text-blue-600">VAULT</span></h1>
+          <p className="text-slate-400 mt-3 font-black uppercase text-[9px] tracking-[0.3em]">{isRegister ? 'New Identity Registry' : 'Authentication Hub'}</p>
         </div>
-        {error && <div className="mb-6 p-4 bg-red-50 text-red-700 text-xs font-black rounded-2xl border-l-4 border-red-500">{error}</div>}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 text-red-700 text-[10px] font-black rounded-xl border-l-4 border-red-500 uppercase tracking-widest flex items-center gap-3 animate-fade-in">
+            <i className="fas fa-triangle-exclamation text-sm"></i>
+            <span>{error}</span>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isRegister && <input type="text" required placeholder="Sovereign Identity" value={name} onChange={e => setName(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:border-blue-600 outline-none font-bold text-sm" />}
-          <input type="email" required placeholder="Verified Email" value={email} onChange={e => setEmail(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:border-blue-600 outline-none font-bold text-sm" />
-          <input type="password" required placeholder="Access Key" value={password} onChange={e => setPassword(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:border-blue-600 outline-none font-bold text-sm" />
-          <button type="submit" disabled={loading} className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-widest text-xs hover:bg-black">
-            {loading ? <i className="fas fa-spinner fa-spin"></i> : (isRegister ? 'Initialize Vault' : 'Decrypt Assets')}
+          {isRegister && (
+            <input type="text" required placeholder="Display Name (Min 3 chars)" value={name} onChange={e => setName(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-transparent rounded-2xl font-bold text-sm outline-none focus:border-blue-600 focus:bg-white transition-all shadow-sm" />
+          )}
+          <div className="relative">
+            <input type="email" required placeholder="Email Address (e.g. user@gmail.com)" value={email} onChange={e => setEmail(e.target.value.toLowerCase().replace(/\s/g, ''))} className={`w-full px-6 py-4 bg-slate-50 border rounded-2xl font-bold text-sm outline-none transition-all ${isRegister ? (email ? (isEmailValid ? 'border-emerald-500' : 'border-red-500') : 'border-transparent') : 'border-transparent focus:border-blue-600'} focus:bg-white shadow-sm`} />
+            {isRegister && email && (
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                <i className={`fas ${isEmailValid ? 'fa-circle-check text-emerald-500' : 'fa-circle-xmark text-red-500'} text-[10px]`}></i>
+              </div>
+            )}
+          </div>
+          {isRegister && (
+            <div className="flex flex-wrap gap-2 px-1">
+              {VERIFIED_DOMAINS.map(domain => (
+                <button key={domain} type="button" onClick={() => handleDomainSelect(domain)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-[8px] font-black text-slate-500 rounded-lg uppercase tracking-widest transition-colors border border-slate-200">{domain}</button>
+              ))}
+            </div>
+          )}
+          {isRegister && (
+            <div className="grid grid-cols-2 gap-3">
+              <input type="number" placeholder="Age" value={age} onChange={e => setAge(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-transparent rounded-2xl font-bold text-sm outline-none focus:border-blue-600 transition-all shadow-sm" />
+              <select value={gender} onChange={e => setGender(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-transparent rounded-2xl font-bold text-sm outline-none focus:border-blue-600 transition-all appearance-none cursor-pointer">
+                <option value="">Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          )}
+          <div className="relative">
+            <input type="password" required placeholder={isRegister ? "Access Key (Min 6 chars)" : "Access Key"} value={password} onChange={e => setPassword(e.target.value)} className={`w-full px-6 py-4 bg-slate-50 border rounded-2xl font-bold text-sm outline-none transition-all ${isRegister && password ? (isPasswordValid ? 'border-emerald-500 focus:border-emerald-500' : 'border-red-500 focus:border-red-500') : 'border-transparent focus:border-blue-600'} focus:bg-white shadow-sm`} />
+            {isRegister && password && (
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                <i className={`fas ${isPasswordValid ? 'fa-circle-check text-emerald-500' : 'fa-circle-xmark text-red-500'} text-[10px]`}></i>
+              </div>
+            )}
+          </div>
+          <button type="submit" disabled={loading || (isRegister && !canRegister)} className={`w-full text-white font-black py-5 rounded-2xl shadow-lg active:scale-95 transition-all uppercase tracking-[0.2em] text-[10px] mt-2 ${isRegister && !canRegister ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-slate-900 hover:bg-black'}`}>
+            {loading ? <span className="flex items-center justify-center gap-2"><i className="fas fa-circle-notch fa-spin"></i> Syncing...</span> : (isRegister ? 'Initialize Identity' : 'Vault Access')}
           </button>
         </form>
-        <button onClick={() => setIsRegister(!isRegister)} className="w-full mt-8 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-blue-600 transition-colors">{isRegister ? 'Existing Member? Access Now' : 'Join the Global Sovereign Elite'}</button>
+        <button onClick={() => { audioService.playClick(); setIsRegister(!isRegister); setError(''); setEmail(''); setPassword(''); setName('');}} className="w-full mt-8 text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] hover:text-blue-600 transition-colors">
+          {isRegister ? 'Return to Access Gate' : 'New Identity? Request Registry'}
+        </button>
       </div>
     </div>
   );
 };
 
-const LogoutModal: React.FC<{ isOpen: boolean; onConfirm: () => void; onCancel: () => void }> = ({ isOpen, onConfirm, onCancel }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 md:p-6 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-      <div className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-white/20 p-8 md:p-10 scale-in">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner">
-            <i className="fas fa-power-off text-2xl"></i>
-          </div>
-          <h3 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight">Terminate Session?</h3>
-        </div>
-        <div className="mt-8 space-y-3">
-          <button onClick={onConfirm} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:bg-red-600 transition-all">Confirm Termination</button>
-          <button onClick={onCancel} className="w-full py-4 bg-slate-50 text-slate-400 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:text-slate-900 transition-all">Stay Secure</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; user: User; onLogoutClick: () => void }> = ({ isOpen, onClose, user, onLogoutClick }) => {
+const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; user: User; onLogoutRequest: () => void }> = ({ isOpen, onClose, user, onLogoutRequest }) => {
   const location = useLocation();
   const isAdmin = user.email === ADMIN_EMAIL;
-  const TIER_COLORS = { [VaultTier.COPPER]: 'from-orange-400 to-orange-600', [VaultTier.SILVER]: 'from-slate-300 to-slate-500', [VaultTier.GOLD]: 'from-amber-300 to-amber-600', [VaultTier.PLATINUM]: 'from-cyan-300 to-blue-500', [VaultTier.DIAMOND]: 'from-indigo-400 to-purple-600' };
-  
-  const menuCategories = useMemo(() => isAdmin ? [
-    { title: 'ADMINISTRATION CORE', items: [{ name: 'Admin Console', path: '/admin', icon: 'fa-user-shield' }, { name: 'Assets Overview', path: '/', icon: 'fa-layer-group' }] }
+  const menuItems = isAdmin ? [
+    { path: '/admin', icon: 'fa-user-shield', label: 'Admin Panel' }
   ] : [
-    { title: 'STRATEGIC CORE', items: [{ name: 'Assets Overview', path: '/', icon: 'fa-layer-group' }] }, 
-    { title: 'WEALTH OPTIMIZATION', items: [
-      { name: 'Asset History', path: '/history', icon: 'fa-clock-rotate-left' },
-      { name: 'Money Lend', path: '/credit', icon: 'fa-indian-rupee-sign' }, 
-      { name: 'Money Borrow', path: '/debt', icon: 'fa-user-clock' }, 
-      { name: 'Savings Missions', path: '/savings', icon: 'fa-vault' }
-    ] }, 
-    { title: 'ELITE PROGRESSION', items: [
-      { name: 'Global Ranks', path: '/leaderboard', icon: 'fa-trophy' }, 
-      { name: 'Identity Settings', path: '/profile', icon: 'fa-user-gear' }, 
-      { name: 'Support', path: '/support', icon: 'fa-heart' }
-    ] }
-  ], [isAdmin]);
-
+    { path: '/', icon: 'fa-house', label: 'Dashboard' },
+    { path: '/history', icon: 'fa-list-ul', label: 'History' },
+    { path: '/budgets', icon: 'fa-chart-pie', label: 'Budgets' },
+    { path: '/debt', icon: 'fa-hand-holding-dollar', label: 'Debt' },
+    { path: '/credit', icon: 'fa-hand-holding-heart', label: 'Credit' },
+    { path: '/savings', icon: 'fa-bullseye', label: 'Set Goal' },
+    { path: '/leaderboard', icon: 'fa-trophy', label: 'Ranks' },
+    { path: '/profile', icon: 'fa-user-gear', label: 'Profile' },
+    { path: '/support', icon: 'fa-circle-dollar-to-slot', label: 'Support' },
+  ];
   return (
     <>
-      <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={onClose}></div>
-      <div className={`fixed top-0 left-0 bottom-0 w-full max-w-[320px] bg-slate-950 text-white z-[210] shadow-2xl transition-transform duration-500 ease-out transform ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex flex-col h-full p-8">
-          <div className="flex justify-between items-center mb-10">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 bg-gradient-to-br ${TIER_COLORS[user.tier]} rounded-2xl flex items-center justify-center shadow-lg shadow-black/50`}><i className="fas fa-crown text-white"></i></div>
-              <div><p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{user.tier}</p><p className="text-xl font-black">{user.name}</p></div>
+      <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] transition-opacity ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => { audioService.playClick(); onClose(); }} />
+      <aside className={`fixed top-0 left-0 bottom-0 w-[260px] bg-white z-[1001] shadow-2xl transition-transform duration-300 ease-out border-r border-slate-100 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-slate-50">
+          <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-2xl">
+            <div className={`w-10 h-10 rounded-xl ${isAdmin ? 'bg-blue-600' : 'bg-slate-800'} text-white flex items-center justify-center font-black text-xs uppercase shadow-md`}>
+              {isAdmin ? <i className="fas fa-crown text-[10px]"></i> : user.name[0]}
             </div>
-            <button onClick={onClose} className="w-10 h-10 rounded-xl hover:bg-white/10 flex items-center justify-center transition-all"><i className="fas fa-times"></i></button>
+            <div className="overflow-hidden">
+              <p className="text-[10px] font-black text-slate-900 uppercase truncate leading-none mb-1">{isAdmin ? 'Administrator' : user.name}</p>
+              <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">{isAdmin ? 'ROOT LEVEL' : user.tier}</p>
+            </div>
           </div>
-          <div className="flex-1 space-y-10 overflow-y-auto scrollbar-hide">
-            {menuCategories.map((cat, idx) => (
-              <div key={idx}>
-                <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-[0.3em] mb-4">{cat.title}</h3>
-                <div className="space-y-2">
-                  {cat.items.map((item, i) => (
-                    <Link key={i} to={item.path} onClick={onClose} className={`flex items-center gap-4 px-5 py-4 rounded-2xl transition-all ${location.pathname === item.path ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
-                      <i className={`fas ${item.icon} w-5 text-center`}></i><span className="font-bold text-sm">{item.name}</span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <button onClick={onLogoutClick} className="mt-8 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-red-500/10 text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">Terminate Session</button>
         </div>
-      </div>
+        <nav className="p-3 space-y-1">
+          {menuItems.map((item, i) => (
+            <Link key={i} to={item.path} onClick={() => { audioService.playClick(); onClose(); }} className={`flex items-center gap-4 px-5 py-3.5 rounded-xl transition-all ${location.pathname === item.path ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'}`}>
+              <i className={`fas ${item.icon} text-xs`}></i>
+              <span className="text-[9px] font-black uppercase tracking-[0.2em]">{item.label}</span>
+            </Link>
+          ))}
+          <button onClick={() => { audioService.playClick(); onLogoutRequest(); }} className="w-full flex items-center gap-4 px-5 py-4 rounded-xl text-red-500 hover:bg-red-50 transition-all mt-4 group">
+            <i className="fas fa-power-off text-xs group-hover:rotate-90 transition-transform"></i>
+            <span className="text-[9px] font-black uppercase tracking-[0.2em]">Logout</span>
+          </button>
+        </nav>
+      </aside>
     </>
   );
 };
@@ -166,172 +230,174 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [events, setEvents] = useState<SovereignEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formInitialType, setFormInitialType] = useState<TransactionType | undefined>(undefined);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isConnected, setIsConnected] = useState<boolean | null>(null);
-
-  useEffect(() => { 
-    storageService.getSavedSession().then(u => { 
-      if (u) setCurrentUser(u); 
-      setLoading(false); 
-    }); 
-    
-    const checkConn = async () => {
-      const ok = await storageService.checkConnection();
-      setIsConnected(ok);
-    };
-    checkConn();
-    const interval = setInterval(checkConn, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [initialCategory, setInitialCategory] = useState<string | undefined>(undefined);
+  const [initialType, setInitialType] = useState<TransactionType | undefined>(undefined);
+  const [isBgmOn, setIsBgmOn] = useState(false);
   
+  const isAdmin = currentUser?.email === ADMIN_EMAIL;
+
   const refreshData = async () => {
     if (!currentUser) return;
-    const ok = await storageService.checkConnection();
-    setIsConnected(ok);
-
-    const [txs, allUsers] = await Promise.all([
-      storageService.getTransactions(currentUser.email === ADMIN_EMAIL ? undefined : currentUser.id),
-      storageService.getAllUsers()
-    ]);
-    setTransactions(txs);
-    setUsers(allUsers);
-    
-    const fresh = await storageService.getUserByEmail(currentUser.email);
-    if (fresh) setCurrentUser(fresh);
+    try {
+      const [txs, allUsers, allEvents, fresh] = await Promise.all([
+        storageService.getTransactions(currentUser.id),
+        storageService.getAllUsers(),
+        storageService.getEvents(),
+        storageService.getUserByEmail(currentUser.email)
+      ]);
+      setTransactions(txs);
+      setUsers(allUsers);
+      setEvents(allEvents);
+      if (fresh) setCurrentUser(fresh);
+    } catch (e) { console.error(e); }
   };
+
+  useEffect(() => {
+    storageService.getSavedSession().then(u => {
+      if (u) setCurrentUser(u);
+      setLoading(false);
+    });
+  }, []);
 
   useEffect(() => { if (currentUser) refreshData(); }, [currentUser?.id]);
 
-  const handleAdd = async (tx: any) => { 
-    if (!currentUser) return; 
-    await storageService.addTransaction(currentUser.id, tx); 
-    await refreshData(); 
-    setShowForm(false); 
+  const handleEditRequest = (tx: Transaction) => {
+    audioService.playClick();
+    setEditingTransaction(tx);
+    setInitialCategory(undefined);
+    setInitialType(undefined);
+    setShowForm(true);
   };
-  
-  const triggerForm = (type?: TransactionType) => { setFormInitialType(type); setShowForm(true); };
 
-  const { netBalance, channelBalances } = useMemo(() => {
-    const balances = { [PaymentMethod.SAVING]: 0, [PaymentMethod.ONLINE]: 0, [PaymentMethod.WALLET]: 0 };
-    transactions.forEach(t => {
-      let delta = 0;
-      if (t.type === TransactionType.INCOME) delta = t.amount;
-      else if (t.type === TransactionType.EXPENSE || t.type === TransactionType.SAVING) delta = -t.amount;
-      else if (t.type === TransactionType.CREDIT) delta = t.resolved ? 0 : -t.amount;
-      else if (t.type === TransactionType.DEBT) delta = t.resolved ? 0 : t.amount;
-      if (t.paymentMethod in balances) balances[t.paymentMethod as keyof typeof balances] += delta;
-    });
-    return { netBalance: Object.values(balances).reduce((a, b) => a + b, 0), channelBalances: balances };
+  const handleBgmToggle = () => {
+    audioService.playClick();
+    const playing = audioService.toggleBGM();
+    setIsBgmOn(playing);
+  };
+
+  const netLiquidity = useMemo(() => {
+    return transactions.reduce((acc: number, t: Transaction): number => {
+      const amountValue = Number(t.amount) || 0;
+      const currentAcc = Number(acc) || 0;
+      switch (t.type) {
+        case TransactionType.INCOME: return currentAcc + amountValue;
+        case TransactionType.EXPENSE:
+        case TransactionType.SAVING: return currentAcc - amountValue;
+        case TransactionType.CREDIT: return t.resolved ? currentAcc : currentAcc - amountValue;
+        case TransactionType.DEBT: return t.resolved ? currentAcc : currentAcc + amountValue;
+        default: return currentAcc;
+      }
+    }, 0);
   }, [transactions]);
 
-  if (loading) return <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white"><div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div><p className="font-black text-[10px] tracking-[0.5em] uppercase">Synchronizing Vectors</p></div>;
+  const topSpendingData = useMemo(() => {
+    const expenses = transactions.filter(t => t.type === TransactionType.EXPENSE);
+    const grouped = expenses.reduce((acc, t) => {
+      acc[t.category] = (acc[t.category] || 0) + Number(t.amount);
+      return acc;
+    }, {} as Record<string, number>);
+    return Object.entries(grouped)
+      .map(([category, amount]) => ({ category, amount: Number(amount) }))
+      .sort((a, b) => Number(b.amount) - Number(a.amount))
+      .slice(0, 5);
+  }, [transactions]);
+
+  if (loading) return <div className="min-h-screen bg-[#0f172a] flex items-center justify-center"><div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
   if (!currentUser) return <Auth onLogin={setCurrentUser} />;
-
-  const DashboardHub = (
-    <div className="space-y-12 pb-24 animate-fade-in">
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
-        <div>
-          <h2 className="text-4xl md:text-5xl font-black text-slate-900 tracking-tighter">Command Hub</h2>
-          <div className="flex items-center gap-3 mt-3">
-             <p className="text-slate-500 font-bold uppercase text-[10px] tracking-[0.2em] bg-slate-100 px-3 py-1 rounded-full border border-slate-200">{currentUser.tier} ELITE STATUS</p>
-             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${isConnected ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
-               <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
-               {isConnected ? 'Sync Online' : 'Sync Offline'}
-             </div>
-          </div>
-        </div>
-        <button onClick={() => triggerForm()} className="w-full lg:w-auto bg-blue-600 text-white font-black px-10 py-5 rounded-[2rem] shadow-2xl hover:bg-blue-700 active:scale-95 transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-3">
-          <i className="fas fa-plus-circle"></i> New Asset Entry
-        </button>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-xl transition-all">
-          <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">Net Liquidity</p>
-          <h3 className="text-3xl font-black text-slate-900 tracking-tight">₹{netBalance.toLocaleString()}</h3>
-        </div>
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-xl transition-all">
-          <p className="text-orange-500 text-[10px] font-black uppercase tracking-widest mb-3">Discipline Streak</p>
-          <h3 className="text-3xl font-black text-slate-900 tracking-tight">{currentUser.streak} Days</h3>
-        </div>
-        <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-xl transition-all">
-          <p className="text-amber-500 text-[10px] font-black uppercase tracking-widest mb-3">Vault Coins</p>
-          <h3 className="text-3xl font-black text-slate-900 tracking-tight">{currentUser.coins.toLocaleString()}</h3>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {Object.entries(channelBalances).map(([method, bal]) => (
-          <div key={method} className="bg-slate-900 p-6 rounded-3xl border border-white/5 flex justify-between items-center group hover:bg-slate-800 transition-all">
-            <div>
-              <p className="text-blue-400 text-[8px] font-black uppercase tracking-widest mb-1">{method} Channel</p>
-              <p className="text-xl font-black text-white">₹{bal.toLocaleString()}</p>
-            </div>
-            <div className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-blue-400"><i className={`fas ${method === PaymentMethod.ONLINE ? 'fa-globe' : method === PaymentMethod.SAVING ? 'fa-piggy-bank' : 'fa-wallet'}`}></i></div>
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-white p-8 md:p-10 rounded-[3rem] shadow-sm border border-slate-100">
-          <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">Asset Flow Matrix</h4>
-          <DailyTrend transactions={transactions} />
-        </div>
-        <div className="bg-white p-8 md:p-10 rounded-[3rem] shadow-sm border border-slate-100">
-          <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest mb-8">Category Distribution</h4>
-          <CategoryPie transactions={transactions} />
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <Router>
-      <div className="min-h-screen bg-slate-50 flex flex-col">
-        <nav className="glass-effect sticky top-4 mx-4 md:mx-10 z-[300] p-4 md:p-6 rounded-[2.5rem] flex justify-between items-center shadow-lg border-white/40 mb-10">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(true)} className="w-12 h-12 rounded-2xl bg-slate-900 text-white hover:bg-black transition-all shadow-xl active:scale-90 flex items-center justify-center"><i className="fas fa-bars"></i></button>
-            <Link to="/" className="text-xl md:text-2xl font-black tracking-tighter text-slate-900 hidden sm:block">FINTRACK <span className="text-blue-600">SOVEREIGN</span></Link>
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col font-['Inter']">
+        <header className="sticky top-0 bg-white/90 backdrop-blur-md z-[900] border-b border-slate-100 px-6 py-3 flex justify-between items-center shadow-sm">
+          <div className="flex items-center gap-3">
+            <button onClick={() => { audioService.playClick(); setIsMenuOpen(true); }} className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all">
+              <i className="fas fa-bars text-xs"></i>
+            </button>
+            <button onClick={handleBgmToggle} className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isBgmOn ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 text-slate-300'}`}>
+              <i className={`fas ${isBgmOn ? 'fa-volume-high' : 'fa-volume-xmark'} text-[10px]`}></i>
+            </button>
           </div>
-          <div className="flex items-center gap-4">
-            <Link to="/profile" className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-600 hover:text-white transition-all shadow-inner"><i className="fas fa-user"></i></Link>
+          <div className="flex items-center gap-3">
+             {!isAdmin && (
+               <>
+                 <div className="bg-orange-50 px-4 py-2 rounded-xl text-[9px] font-black text-orange-600 border border-orange-100 flex items-center gap-1">{currentUser.streak}🔥</div>
+                 <div className="bg-amber-50 px-4 py-2 rounded-xl text-[9px] font-black text-amber-600 border border-amber-100 flex items-center gap-1.5"><i className="fas fa-coins text-amber-500"></i><span>{(currentUser.coins || 0).toLocaleString()}</span></div>
+                 <button onClick={() => { audioService.playClick(); setEditingTransaction(null); setInitialCategory(undefined); setInitialType(undefined); setShowForm(true); }} className="w-10 h-10 bg-blue-600 text-white rounded-xl shadow-lg flex items-center justify-center active:scale-90 transition-all"><i className="fas fa-plus"></i></button>
+               </>
+             )}
+             {isAdmin && <div className="bg-blue-50 px-4 py-2 rounded-xl text-[9px] font-black text-blue-600 border border-blue-100 flex items-center gap-2"><i className="fas fa-user-shield"></i><span>ADMIN MODE</span></div>}
           </div>
-        </nav>
-
-        <main className="flex-1 px-4 md:px-10 max-w-[1600px] mx-auto w-full">
+        </header>
+        <Sidebar isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} user={currentUser} onLogoutRequest={() => setShowLogoutConfirm(true)} />
+        <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
           <Routes>
-            <Route path="/" element={DashboardHub} />
-            <Route path="/history" element={<TransactionHistory transactions={transactions} />} />
-            <Route path="/credit" element={<CreditAnalysis transactions={transactions} onAddRequest={triggerForm} onRefresh={refreshData} />} />
-            <Route path="/debt" element={<DebtControl transactions={transactions} onAddRequest={triggerForm} onRefresh={refreshData} />} />
-            <Route path="/savings" element={<SavingsMission transactions={transactions} onAddRequest={triggerForm} userId={currentUser.id} />} />
-            <Route path="/leaderboard" element={<Leaderboard users={users} currentUser={currentUser} />} />
-            <Route path="/profile" element={<Profile user={currentUser} transactions={transactions} onUpdate={setCurrentUser} />} />
-            <Route path="/support" element={<Donation />} />
-            <Route path="/categories" element={<CategoryManager userId={currentUser.id} />} />
-            {currentUser.email === ADMIN_EMAIL && <Route path="/admin" element={<AdminPanel users={users} transactions={transactions} />} />}
+            <Route path="/" element={isAdmin ? <Navigate to="/admin" /> : (
+              <div className="space-y-10">
+                <div className="flex justify-between items-end">
+                  <h1 className="text-4xl font-black text-slate-900 uppercase tracking-tighter leading-none">CORE <span className="text-blue-600">HUB</span></h1>
+                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-white px-4 py-2 rounded-full border border-slate-100 shadow-sm flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>LIQUIDITY: ₹{netLiquidity.toLocaleString()}</div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 min-h-[300px]"><h4 className="text-[9px] font-black uppercase text-slate-400 mb-8 tracking-widest">Trend</h4><DailyTrend transactions={transactions} /></div>
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col"><h4 className="text-[9px] font-black uppercase text-slate-400 mb-8 tracking-widest">Consumption</h4><TopSpendingChart data={topSpendingData} /></div>
+                </div>
+              </div>
+            )} />
+            <Route path="/history" element={!isAdmin ? <TransactionHistory transactions={transactions} onRefresh={refreshData} onEditRequest={handleEditRequest} /> : <Navigate to="/admin" />} />
+            <Route path="/credit" element={!isAdmin ? <CreditAnalysis transactions={transactions} onAddRequest={() => { audioService.playClick(); setEditingTransaction(null); setInitialType(TransactionType.CREDIT); setInitialCategory(undefined); setShowForm(true); }} onRefresh={refreshData} onEditRequest={handleEditRequest} /> : <Navigate to="/admin" />} />
+            <Route path="/debt" element={!isAdmin ? <DebtControl transactions={transactions} onAddRequest={() => { audioService.playClick(); setEditingTransaction(null); setInitialType(TransactionType.DEBT); setInitialCategory(undefined); setShowForm(true); }} onRefresh={refreshData} onEditRequest={handleEditRequest} /> : <Navigate to="/admin" />} />
+            <Route path="/savings" element={!isAdmin ? <SavingsMission transactions={transactions} onAddRequest={(type, cat) => { audioService.playClick(); setEditingTransaction(null); setInitialType(type); setInitialCategory(cat); setShowForm(true); }} onRefresh={refreshData} userId={currentUser.id} /> : <Navigate to="/admin" />} />
+            <Route path="/budgets" element={!isAdmin ? <BudgetCenter transactions={transactions} userId={currentUser.id} onRefresh={refreshData} /> : <Navigate to="/admin" />} />
+            <Route path="/leaderboard" element={!isAdmin ? <Leaderboard users={users} currentUser={currentUser} /> : <Navigate to="/admin" />} />
+            <Route path="/profile" element={!isAdmin ? <Profile user={currentUser} transactions={transactions} onUpdate={setCurrentUser} /> : <Navigate to="/admin" />} />
+            <Route path="/support" element={!isAdmin ? <Donation /> : <Navigate to="/admin" />} />
+            {isAdmin && <Route path="/admin" element={<AdminPanel users={users} transactions={transactions} onRefresh={refreshData} />} />}
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
-
-        <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} user={currentUser} onLogoutClick={() => setShowLogoutConfirm(true)} />
-        <LogoutModal isOpen={showLogoutConfirm} onConfirm={() => { storageService.logout(); window.location.reload(); }} onCancel={() => setShowLogoutConfirm(false)} />
-        
-        {showForm && (
+        {!isAdmin && <AIChat user={currentUser} transactions={transactions} />}
+        {!isAdmin && <EventOverlay events={events} />}
+        {showLogoutConfirm && (
+          <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-slate-900/90 backdrop-blur-md">
+            <div className="w-full max-sm bg-white rounded-[2.5rem] p-10 text-center shadow-2xl">
+               <div className="w-14 h-14 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6"><i className="fas fa-power-off text-2xl"></i></div>
+               <h3 className="text-xl font-black text-slate-900 uppercase mb-4 tracking-tight">Logout?</h3>
+               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest leading-relaxed mb-8">Confirming termination of the current session vector.</p>
+               <div className="flex flex-col gap-3">
+                  <button onClick={() => { audioService.playClick(); storageService.logout(); setCurrentUser(null); setShowLogoutConfirm(false); }} className="w-full py-4 bg-red-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">Confirm Termination</button>
+                  <button onClick={() => { audioService.playClick(); setShowLogoutConfirm(false); }} className="w-full py-4 bg-slate-50 text-slate-400 rounded-xl font-black text-[10px] uppercase tracking-widest hover:text-slate-900">Abort</button>
+               </div>
+            </div>
+          </div>
+        )}
+        {showForm && !isAdmin && (
           <TransactionForm 
             userId={currentUser.id} 
-            onAdd={handleAdd} 
-            onClose={() => setShowForm(false)} 
-            initialType={formInitialType} 
+            editingTransaction={editingTransaction}
+            initialCategory={initialCategory}
+            initialType={initialType}
+            onSubmit={async (t) => { 
+              audioService.playCoin();
+              if (editingTransaction) {
+                await storageService.updateTransaction(editingTransaction.id, t);
+              } else {
+                await storageService.addTransaction(currentUser.id, t);
+              }
+              await refreshData(); 
+              setShowForm(false);
+              setEditingTransaction(null);
+              setInitialCategory(undefined);
+              setInitialType(undefined);
+            } } 
+            onClose={() => { audioService.playClick(); setShowForm(false); setEditingTransaction(null); setInitialCategory(undefined); setInitialType(undefined); }} 
           />
         )}
-        
-        {/* New Floating AI Chat Component */}
-        <AIChat user={currentUser} transactions={transactions} />
       </div>
     </Router>
   );

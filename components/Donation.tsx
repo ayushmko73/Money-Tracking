@@ -2,71 +2,78 @@
 import React, { useState } from 'react';
 
 export const Donation: React.FC = () => {
-  const [amount, setAmount] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+  const upiId = "swatiakm@axl";
+  const upiName = "FinTrack Sovereign";
+  
+  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(upiName)}&cu=INR`;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiUri)}&bgcolor=ffffff&color=0f172a&margin=20`;
 
-  const plans = [
-    { value: 100, label: '₹100', icon: '☕', desc: 'Buy us a chai' },
-    { value: 500, label: '₹500', icon: '🚀', desc: 'Support development' },
-    { value: 2000, label: '₹2000', icon: '🌟', desc: 'Sovereign supporter' },
-  ];
+  const handleCopy = () => {
+    navigator.clipboard.writeText(upiId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <div className="max-w-4xl mx-auto py-12 px-4">
-      <div className="text-center mb-12">
-        <h1 className="text-4xl font-extrabold text-slate-900 mb-4 tracking-tighter">Support FinTrack Sovereign</h1>
-        <p className="text-lg text-slate-600 font-medium">Help us keep the financial management tools free and accessible for everyone.</p>
+    <div className="max-w-4xl mx-auto py-12 md:py-24 px-4 animate-fade-in font-['Inter'] pb-40">
+      <div className="text-center mb-16 md:mb-20">
+        <div className="inline-flex items-center gap-2 bg-slate-900 text-white px-4 py-1.5 rounded-full mb-6">
+          <i className="fas fa-heart text-[10px] text-red-500 animate-pulse"></i>
+          <span className="text-[10px] font-black uppercase tracking-[0.4em]">Support Protocol</span>
+        </div>
+        <h1 className="text-6xl md:text-9xl font-black tracking-tighter uppercase leading-none text-slate-900">SUPPORT</h1>
+        <p className="text-slate-400 text-[10px] md:text-xs font-black uppercase tracking-[0.6em] mt-4 ml-1">Secure Capital Flow Authorized</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        {plans.map((plan) => (
-          <button
-            key={plan.value}
-            onClick={() => setAmount(plan.value)}
-            className={`p-8 rounded-[2.5rem] transition-all border-2 text-center group ${
-              amount === plan.value 
-                ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-50' 
-                : 'border-white bg-white hover:border-slate-200 shadow-sm'
-            }`}
-          >
-            <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">{plan.icon}</div>
-            <div className="text-2xl font-black text-slate-800 mb-1">{plan.label}</div>
-            <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{plan.desc}</div>
-          </button>
-        ))}
-      </div>
-
-      <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100">
-        <h3 className="text-xl font-black text-slate-900 mb-8 tracking-tight">Payment Detail Identification</h3>
-        <div className="space-y-6 mb-10">
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Custom Contribution Amount</label>
-            <div className="relative">
-              <span className="absolute left-6 top-1/2 -translate-y-1/2 text-xl font-black text-slate-300">₹</span>
-              <input
-                type="number"
-                value={amount || ''}
-                onChange={(e) => setAmount(Number(e.target.value))}
-                className="w-full pl-12 pr-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:border-blue-500 focus:bg-white outline-none font-black text-lg text-slate-900 transition-all"
-                placeholder="0.00"
-              />
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-white rounded-[3rem] md:rounded-[3.5rem] p-8 md:p-14 border border-slate-100 shadow-2xl relative overflow-hidden text-center">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-slate-50 rounded-full blur-3xl -mr-16 -mt-16"></div>
+          
+          <h3 className="text-slate-900 text-[10px] font-black uppercase tracking-[0.3em] mb-10 relative z-10">AUTHORIZE DONATION</h3>
+          
+          <div className="relative z-10 mx-auto w-full max-w-[240px] aspect-square bg-slate-50 rounded-[2.5rem] p-4 border border-slate-100 mb-10 group">
+            <img 
+              src={qrUrl} 
+              alt="UPI QR Code" 
+              className="w-full h-full object-contain rounded-2xl group-hover:scale-105 transition-transform duration-500"
+            />
+            <div className="absolute -bottom-3 -right-3 w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-white shadow-xl rotate-12">
+              <i className="fas fa-qrcode"></i>
             </div>
           </div>
+
+          <div className="space-y-6 relative z-10">
+            <div className="bg-slate-50 border border-slate-100 rounded-3xl p-6">
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2">UPI IDENTIFIER</p>
+              <p className="text-slate-900 text-lg font-black tracking-tight mb-4 font-mono">{upiId}</p>
+              
+              <button 
+                onClick={handleCopy}
+                className={`w-full py-4 rounded-2xl font-black text-[9px] uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 ${
+                  copied ? 'bg-emerald-500 text-white shadow-lg' : 'bg-slate-900 text-white shadow-lg active:scale-95'
+                }`}
+              >
+                <i className={`fas ${copied ? 'fa-check' : 'fa-copy'}`}></i>
+                {copied ? 'COPIED' : 'COPY ID'}
+              </button>
+            </div>
+            <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest leading-relaxed">
+              Use any UPI app: GPay, PhonePe, Paytm...
+            </p>
+          </div>
         </div>
-
-        <button className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-black transition-all shadow-2xl flex items-center justify-center gap-3">
-          <i className="fas fa-indian-rupee-sign text-sm opacity-50"></i>
-          Secure Sovereign Contribution
-        </button>
-
-        <div className="mt-10 flex items-center justify-center gap-8 opacity-20">
-          <i className="fab fa-cc-visa text-3xl"></i>
-          <i className="fab fa-cc-mastercard text-3xl"></i>
-          <i className="fab fa-cc-stripe text-3xl"></i>
-          <i className="fab fa-google-pay text-3xl"></i>
+        
+        <div className="mt-12 p-8 bg-slate-900 rounded-[2.5rem] text-white flex items-center gap-6 shadow-xl relative overflow-hidden">
+           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full blur-2xl"></div>
+           <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center text-blue-400 relative z-10">
+             <i className="fas fa-shield-halved"></i>
+           </div>
+           <p className="text-[10px] font-black uppercase tracking-widest leading-relaxed relative z-10 text-slate-400">
+             All contributions directly fund <span className="text-white">infrastructure</span> and <span className="text-white">secure hosting</span>.
+           </p>
         </div>
       </div>
-      
-      <p className="text-center text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-10">End of Support Terminal</p>
     </div>
   );
 };
