@@ -71,6 +71,7 @@ class AudioService {
     const now = this.ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
     notes.forEach((freq, i) => {
+      if (!this.ctx || !this.compressor) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sine';
@@ -78,7 +79,7 @@ class AudioService {
       gain.gain.setValueAtTime(0.05, now + i * 0.05);
       gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.05 + 0.2);
       osc.connect(gain);
-      gain.connect(this.compressor!);
+      gain.connect(this.compressor);
       osc.start(now + i * 0.05);
       osc.stop(now + i * 0.05 + 0.2);
     });
@@ -116,6 +117,7 @@ class AudioService {
     const now = this.ctx.currentTime;
     const chords = [261.63, 329.63, 392.00, 523.25]; // C Major Chord
     chords.forEach((freq) => {
+      if (!this.ctx || !this.compressor) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       const filter = this.ctx.createBiquadFilter();
@@ -133,7 +135,7 @@ class AudioService {
       
       osc.connect(filter);
       filter.connect(gain);
-      gain.connect(this.compressor!);
+      gain.connect(this.compressor);
       
       osc.start(now);
       osc.stop(now + 1.5);
@@ -222,7 +224,9 @@ class AudioService {
   private stopBGM() {
     if (this.sequenceInterval) clearInterval(this.sequenceInterval);
     if (this.bgmGain) {
-      this.bgmGain.gain.linearRampToValueAtTime(0, this.ctx!.currentTime + 2);
+      if (this.ctx) {
+        this.bgmGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 2);
+      }
       setTimeout(() => {
         this.bgmOscs.forEach(o => { try { (o as OscillatorNode).stop(); } catch(e) {} });
         this.bgmOscs = [];

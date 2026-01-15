@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, LineChart, Line, AreaChart, Area, LabelList
+  PieChart, Pie, Cell, AreaChart, Area, LabelList
 } from 'recharts';
 import { Transaction, TransactionType } from '../types';
 import { COLORS } from '../constants';
@@ -148,7 +147,7 @@ export const TopSpendingChart: React.FC<{ data: { category: string; amount: numb
             axisLine={false} 
             tickLine={false} 
             width={80}
-            tick={{ fontWeight: 900, fill: '#64748b', textTransform: 'uppercase' }}
+            tick={{ fontWeight: 900, fill: '#64748b' }}
           />
           <Tooltip 
             cursor={{ fill: 'transparent' }}
@@ -180,7 +179,7 @@ export const TopSpendingChart: React.FC<{ data: { category: string; amount: numb
             <LabelList 
               dataKey="amount" 
               position="right" 
-              formatter={(val: number) => `₹${val.toLocaleString()}`} 
+              formatter={(val: any) => `₹${Number(val).toLocaleString()}`} 
               fontSize={9} 
               fontWeight={900} 
               fill="#94a3b8" 
