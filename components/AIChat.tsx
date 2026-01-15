@@ -185,7 +185,7 @@ export const AIChat: React.FC<AIChatProps> = ({ user, transactions }) => {
             isOpen ? 'bg-slate-900' : 'bg-gradient-to-br from-blue-700 to-indigo-950'
           }`}
         >
-          <i className={`fas ${isOpen ? 'fa-times' : 'fa-chess-king'} text-white text-xl md:text-2xl`}></i>
+          <i className={`fas ${isOpen ? 'fa-times' : 'fa-robot'} text-white text-xl md:text-2xl`}></i>
           {!isOpen && <div className="absolute inset-0 border-2 border-blue-400 rounded-full animate-ping opacity-20"></div>}
         </button>
       </div>

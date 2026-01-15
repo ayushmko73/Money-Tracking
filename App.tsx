@@ -28,10 +28,8 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const VERIFIED_DOMAINS = ['@gmail.com', '@outlook.com', '@icloud.com', '@proton.me', '@yahoo.com'];
-
   const isEmailValid = useMemo(() => {
-    const regex = /^[a-zA-Z0-9._%+-]+@(gmail|outlook|hotmail|yahoo|icloud|protonmail|me|proton)\.(com|me)$/;
+    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     return regex.test(email.toLowerCase());
   }, [email]);
 
@@ -42,12 +40,6 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
   const canRegister = useMemo(() => {
     return isEmailValid && isPasswordValid && name.trim().length >= 3;
   }, [isEmailValid, isPasswordValid, name]);
-
-  const handleDomainSelect = (domain: string) => {
-    audioService.playClick();
-    const currentVal = email.split('@')[0];
-    setEmail(currentVal + domain);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +60,7 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
       const user = await storageService.getUserByEmail(targetEmail);
       if (isRegister) {
         if (!isEmailValid) {
-          setError('Restricted Identity Vector. Please use a verified domain (Gmail/Outlook).');
+          setError('Security Constraint: Invalid Email Format detected.');
           setLoading(false);
           return;
         }
@@ -141,13 +133,6 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
             )}
           </div>
           {isRegister && (
-            <div className="flex flex-wrap gap-2 px-1">
-              {VERIFIED_DOMAINS.map(domain => (
-                <button key={domain} type="button" onClick={() => handleDomainSelect(domain)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-[8px] font-black text-slate-500 rounded-lg uppercase tracking-widest transition-colors border border-slate-200">{domain}</button>
-              ))}
-            </div>
-          )}
-          {isRegister && (
             <div className="grid grid-cols-2 gap-3">
               <input type="number" placeholder="Age" value={age} onChange={e => setAge(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-transparent rounded-2xl font-bold text-sm outline-none focus:border-blue-600 transition-all shadow-sm" />
               <select value={gender} onChange={e => setGender(e.target.value)} className="w-full px-6 py-4 bg-slate-50 border border-transparent rounded-2xl font-bold text-sm outline-none focus:border-blue-600 transition-all appearance-none cursor-pointer">
@@ -170,7 +155,7 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
             {loading ? <span className="flex items-center justify-center gap-2"><i className="fas fa-circle-notch fa-spin"></i> Syncing...</span> : (isRegister ? 'Initialize Identity' : 'Vault Access')}
           </button>
         </form>
-        <button onClick={() => { audioService.playClick(); setIsRegister(!isRegister); setError(''); setEmail(''); setPassword(''); setName('');}} className="w-full mt-8 text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] hover:text-blue-600 transition-colors">
+        <button onClick={() => { audioService.playClick(); setIsRegister(!isRegister); setError(''); setEmail(''); setPassword(''); setName(''); setAge(''); setGender('');}} className="w-full mt-8 text-[9px] font-black text-slate-400 uppercase tracking-[0.4em] hover:text-blue-600 transition-colors text-center">
           {isRegister ? 'Return to Access Gate' : 'New Identity? Request Registry'}
         </button>
       </div>

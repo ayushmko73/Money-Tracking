@@ -1,6 +1,6 @@
 class AudioService {
   private ctx: AudioContext | null = null;
-  private bgmOscs: (OscillatorNode | LFOType)[] = [];
+  private bgmOscs: (OscillatorNode | GainNode | BiquadFilterNode)[] = [];
   private bgmGain: GainNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
   private isBgmPlaying = false;
@@ -77,15 +77,17 @@ class AudioService {
     const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
     notes.forEach((freq, i) => {
-      if (!ctx || !compressor) return;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      const currentCtx = this.ctx;
+      const currentCompressor = this.compressor;
+      if (!currentCtx || !currentCompressor) return;
+      const osc = currentCtx.createOscillator();
+      const gain = currentCtx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, now + i * 0.05);
       gain.gain.setValueAtTime(0.05, now + i * 0.05);
       gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.05 + 0.2);
       osc.connect(gain);
-      gain.connect(compressor);
+      gain.connect(currentCompressor);
       osc.start(now + i * 0.05);
       osc.stop(now + i * 0.05 + 0.2);
     });
@@ -127,10 +129,12 @@ class AudioService {
     const now = ctx.currentTime;
     const chords = [261.63, 329.63, 392.00, 523.25]; // C Major Chord
     chords.forEach((freq) => {
-      if (!ctx || !compressor) return;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      const filter = ctx.createBiquadFilter();
+      const currentCtx = this.ctx;
+      const currentCompressor = this.compressor;
+      if (!currentCtx || !currentCompressor) return;
+      const osc = currentCtx.createOscillator();
+      const gain = currentCtx.createGain();
+      const filter = currentCtx.createBiquadFilter();
       
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(freq, now);
@@ -145,7 +149,7 @@ class AudioService {
       
       osc.connect(filter);
       filter.connect(gain);
-      gain.connect(compressor);
+      gain.connect(currentCompressor);
       
       osc.start(now);
       osc.stop(now + 1.5);
@@ -166,74 +170,89 @@ class AudioService {
     this.isBgmPlaying = true;
     this.bgmGain = ctx.createGain();
     this.bgmGain.gain.setValueAtTime(0, ctx.currentTime);
-    this.bgmGain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 4);
+    this.bgmGain.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 3);
     this.bgmGain.connect(compressor);
 
-    // Deep Sub Kick
-    const startPulse = () => {
-      const currentCtx = this.ctx;
-      const currentBgmGain = this.bgmGain;
-      if (!currentCtx || !currentBgmGain) return;
-      const kickOsc = currentCtx.createOscillator();
-      const kickGain = currentCtx.createGain();
-      kickOsc.type = 'sine';
-      kickOsc.frequency.setValueAtTime(55, currentCtx.currentTime);
-      kickOsc.frequency.exponentialRampToValueAtTime(0.01, currentCtx.currentTime + 0.4);
-      kickGain.gain.setValueAtTime(0.12, currentCtx.currentTime);
-      kickGain.gain.exponentialRampToValueAtTime(0.001, currentCtx.currentTime + 0.4);
-      kickOsc.connect(kickGain);
-      kickGain.connect(currentBgmGain);
-      kickOsc.start();
-      kickOsc.stop(currentCtx.currentTime + 0.4);
-    };
-
-    // Warm Lo-fi Pad
-    const padOsc = ctx.createOscillator();
+    // 1. ZEN BREATH PAD
+    // Deep, evolving harmonic layer
+    const pad1 = ctx.createOscillator();
+    const pad2 = ctx.createOscillator();
     const padFilter = ctx.createBiquadFilter();
-    padOsc.type = 'triangle';
-    padOsc.frequency.setValueAtTime(130.81, ctx.currentTime); // C3
+    const padGain = ctx.createGain();
+
+    pad1.type = 'sine';
+    pad1.frequency.setValueAtTime(130.81, ctx.currentTime); // C3
+    pad2.type = 'sine';
+    pad2.frequency.setValueAtTime(131.2, ctx.currentTime); // Slightly detuned C3
+
     padFilter.type = 'lowpass';
-    padFilter.frequency.setValueAtTime(400, ctx.currentTime);
-    padFilter.Q.setValueAtTime(8, ctx.currentTime);
-    
-    const lfo = ctx.createOscillator();
-    const lfoGain = ctx.createGain();
-    lfo.frequency.setValueAtTime(0.2, ctx.currentTime);
-    lfoGain.gain.setValueAtTime(150, ctx.currentTime);
-    lfo.connect(lfoGain);
-    lfoGain.connect(padFilter.frequency);
-    
-    padOsc.connect(padFilter);
-    padFilter.connect(this.bgmGain);
-    padOsc.start();
-    lfo.start();
-    
-    // Lo-fi Ticker
-    const ticker = (vol: number) => {
-      const currentCtx = this.ctx;
-      const currentBgmGain = this.bgmGain;
-      if (!currentCtx || !currentBgmGain) return;
-      const tOsc = currentCtx.createOscillator();
-      const tGain = currentCtx.createGain();
-      tOsc.type = 'square';
-      tOsc.frequency.setValueAtTime(2000, currentCtx.currentTime);
-      tGain.gain.setValueAtTime(vol, currentCtx.currentTime);
-      tGain.gain.exponentialRampToValueAtTime(0.0001, currentCtx.currentTime + 0.02);
-      tOsc.connect(tGain);
-      tGain.connect(currentBgmGain);
-      tOsc.start();
-      tOsc.stop(currentCtx.currentTime + 0.02);
+    padFilter.frequency.setValueAtTime(300, ctx.currentTime);
+    padFilter.Q.setValueAtTime(1, ctx.currentTime);
+
+    const padLFO = ctx.createOscillator();
+    const padLFOGain = ctx.createGain();
+    padLFO.frequency.setValueAtTime(0.1, ctx.currentTime); // Very slow 10s cycle
+    padLFOGain.gain.setValueAtTime(100, ctx.currentTime);
+    padLFO.connect(padLFOGain);
+    padLFOGain.connect(padFilter.frequency);
+
+    padGain.gain.setValueAtTime(0.15, ctx.currentTime);
+
+    pad1.connect(padFilter);
+    pad2.connect(padFilter);
+    padFilter.connect(padGain);
+    padGain.connect(this.bgmGain);
+
+    pad1.start();
+    pad2.start();
+    padLFO.start();
+
+    // 2. ZEN SUB PULSE
+    // Anchoring but soft
+    const startPulse = () => {
+      if (!this.ctx || !this.bgmGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(65.41, this.ctx.currentTime); // C2
+      gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.05, this.ctx.currentTime + 0.5);
+      gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 2.5);
+      osc.connect(gain);
+      gain.connect(this.bgmGain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 3);
     };
 
-    let step = 0;
-    this.sequenceInterval = window.setInterval(() => {
-      if (step % 8 === 0) startPulse();
-      if (step % 4 === 2) ticker(0.005);
-      if (step % 2 === 0) ticker(0.002);
-      step = (step + 1) % 16;
-    }, 125); // 120 BPM roughly
+    // 3. ETHEREAL SPARKLES
+    // Random high-freq droplets for concentration
+    const playSparkle = () => {
+      if (!this.ctx || !this.bgmGain) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const freqs = [1046.50, 1174.66, 1318.51, 1567.98, 1760.00]; // Pentatonic C
+      const freq = freqs[Math.floor(Math.random() * freqs.length)];
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+      gain.gain.setValueAtTime(0, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.015, this.ctx.currentTime + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 1.5);
+      
+      osc.connect(gain);
+      gain.connect(this.bgmGain);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 1.5);
+    };
 
-    this.bgmOscs.push(padOsc as any, lfo as any);
+    let tick = 0;
+    this.sequenceInterval = window.setInterval(() => {
+      if (tick % 16 === 0) startPulse();
+      if (Math.random() > 0.8) playSparkle(); // Random concentration sparkles
+      tick = (tick + 1) % 64;
+    }, 500);
+
+    this.bgmOscs.push(pad1, pad2, padLFO, padFilter as any, padGain);
     return true;
   }
 
@@ -243,18 +262,20 @@ class AudioService {
     const ctx = this.ctx;
     if (bgmGain) {
       if (ctx) {
-        bgmGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2);
+        bgmGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 3);
       }
       setTimeout(() => {
-        this.bgmOscs.forEach(o => { try { (o as OscillatorNode).stop(); } catch(e) {} });
+        this.bgmOscs.forEach(o => { 
+          try { (o as any).stop?.(); } catch(e) {} 
+          try { (o as any).disconnect?.(); } catch(e) {}
+        });
         this.bgmOscs = [];
         this.bgmGain?.disconnect();
         this.bgmGain = null;
-      }, 2000);
+      }, 3000);
     }
     this.isBgmPlaying = false;
   }
 }
 
-type LFOType = OscillatorNode;
 export const audioService = new AudioService();

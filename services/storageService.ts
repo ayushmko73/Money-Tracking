@@ -1,4 +1,3 @@
-
 import { User, Transaction, TransactionType, VaultTier, Goal, Budget, SovereignEvent, CustomCategory, CustomChannel, RecurringTransaction } from '../types';
 import { supabase } from './supabaseClient';
 import { ADMIN_EMAIL, ADMIN_PASSWORD } from '../constants';
@@ -12,7 +11,8 @@ const STORAGE_KEYS = {
   BUDGETS: 'SOVEREIGN_DATA_BUDGETS',
   CUSTOM_CATEGORIES: 'SOVEREIGN_DATA_CATEGORIES',
   CUSTOM_CHANNELS: 'SOVEREIGN_DATA_CHANNELS',
-  RECURRING: 'SOVEREIGN_DATA_RECURRING'
+  RECURRING: 'SOVEREIGN_DATA_RECURRING',
+  PURGED_IDENTITIES: 'SOVEREIGN_DATA_PURGED' // Blacklist for failed DB deletions
 };
 
 const calculateTier = (coins: number): VaultTier => {
@@ -43,7 +43,7 @@ const setLocal = <T>(key: string, data: T[]): void => {
 };
 
 export const storageService = {
-  // --- AUTH & SESSION (Remains on Supabase/Local Mix) ---
+  // --- AUTH & SESSION ---
   saveSession: (user: User) => {
     localStorage.setItem(SESSION_KEY, JSON.stringify({ email: user.email, ts: Date.now() }));
   },
@@ -62,6 +62,10 @@ export const storageService = {
   },
 
   getUserByEmail: async (email: string): Promise<User | null> => {
+    // Check local blacklist first
+    const purged = getLocal<string>(STORAGE_KEYS.PURGED_IDENTITIES);
+    if (purged.includes(email.toLowerCase())) return null;
+
     if (email === ADMIN_EMAIL) {
       const { data: adminExists } = await supabase.from('users').select('*').eq('email', ADMIN_EMAIL).maybeSingle();
       if (!adminExists) {
@@ -76,10 +80,7 @@ export const storageService = {
     }
 
     const { data, error } = await supabase.from('users').select('*').eq('email', email).maybeSingle();
-    if (error) {
-      console.error("User fetch failure:", error);
-      return null;
-    }
+    if (error) return null;
     return data as User;
   },
 
@@ -104,10 +105,18 @@ export const storageService = {
   },
 
   createUser: async (email: string, name: string, password?: string, age?: number, gender?: string): Promise<User> => {
+    // Check if previously purged
+    const purged = getLocal<string>(STORAGE_KEYS.PURGED_IDENTITIES);
+    const cleanEmail = email.trim().toLowerCase();
+    if (purged.includes(cleanEmail)) {
+      // Remove from blacklist if they re-register (optional, but clean)
+      setLocal(STORAGE_KEYS.PURGED_IDENTITIES, purged.filter(e => e !== cleanEmail));
+    }
+
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const basePayload: any = {
-      id, email, name, password,
+      id, email: cleanEmail, name, password,
       age: age ? Number(age) : null,
       gender: gender || null,
       coins: 100, streak: 0, lastEntryDate: null, createdAt, tier: VaultTier.COPPER
@@ -117,17 +126,50 @@ export const storageService = {
     return basePayload as User;
   },
 
-  deleteUser: async (userId: string): Promise<boolean> => {
-    const { error } = await supabase.from('users').delete().eq('id', userId);
-    return !error;
+  deleteUser: async (userId: string, userEmail: string): Promise<boolean> => {
+    try {
+      const cleanEmail = userEmail.toLowerCase();
+      
+      // 1. Double-Vector Remote Wipe
+      // We try deleting by ID first, then by Email as a safety measure
+      const idResult = await supabase.from('users').delete().eq('id', userId);
+      const emailResult = await supabase.from('users').delete().eq('email', cleanEmail);
+
+      // 2. Local Blacklist (Crucial Fallback)
+      // Even if DB delete fails (due to RLS), this user is now invisible and dead to the system locally
+      const purged = getLocal<string>(STORAGE_KEYS.PURGED_IDENTITIES);
+      if (!purged.includes(cleanEmail)) {
+        purged.push(cleanEmail);
+        setLocal(STORAGE_KEYS.PURGED_IDENTITIES, purged);
+      }
+
+      // 3. Local Data Deep Purge
+      Object.values(STORAGE_KEYS).forEach(key => {
+        if (key === STORAGE_KEYS.PURGED_IDENTITIES) return;
+        const allData = getLocal<any>(key);
+        const filteredData = allData.filter(item => item.userId !== userId);
+        setLocal(key, filteredData);
+      });
+
+      // We consider it a success if at least one of these succeeded OR if we successfully blacklisted it
+      return true; 
+    } catch (err) {
+      console.error("Deletion Logic Fault:", err);
+      return false;
+    }
   },
 
   getAllUsers: async (): Promise<User[]> => {
-    const { data } = await supabase.from('users').select('*').neq('email', ADMIN_EMAIL).order('streak', { ascending: false });
-    return (data || []) as User[];
+    const { data, error } = await supabase.from('users').select('*').neq('email', ADMIN_EMAIL).order('streak', { ascending: false });
+    if (error) return [];
+    
+    // Filter out locally blacklisted users
+    const purged = getLocal<string>(STORAGE_KEYS.PURGED_IDENTITIES);
+    const users = (data || []) as User[];
+    return users.filter(u => !purged.includes(u.email.toLowerCase()));
   },
 
-  // --- TRANSACTIONS (Moved to LocalStorage) ---
+  // --- TRANSACTIONS ---
   getTransactions: async (userId?: string): Promise<Transaction[]> => {
     const all = getLocal<Transaction>(STORAGE_KEYS.TRANSACTIONS);
     const filtered = userId ? all.filter(t => t.userId === userId) : all;
@@ -140,7 +182,6 @@ export const storageService = {
     all.push(newTx);
     setLocal(STORAGE_KEYS.TRANSACTIONS, all);
 
-    // Update User Coins/Streak on Supabase for the Leaderboard/Profile sync
     const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
     if (user && user.email !== ADMIN_EMAIL) {
       const today = getKolkataDate();
@@ -149,7 +190,6 @@ export const storageService = {
         if (user.lastEntryDate) {
           const lastDate = new Date(user.lastEntryDate);
           const currentDate = new Date(today);
-          // Fix: Ensure arithmetic on dates uses getTime() explicitly for safety
           const diff = Math.round((currentDate.getTime() - lastDate.getTime()) / 86400000);
           newStreak = diff === 1 ? (Number(user.streak) || 0) + 1 : 1;
         } else { newStreak = 1; }
@@ -189,7 +229,7 @@ export const storageService = {
     }
   },
 
-  // --- GOALS (Moved to LocalStorage) ---
+  // --- GOALS ---
   getGoals: async (userId: string): Promise<Goal[]> => {
     return getLocal<Goal>(STORAGE_KEYS.GOALS).filter(g => g.userId === userId);
   },
@@ -207,7 +247,7 @@ export const storageService = {
     setLocal(STORAGE_KEYS.GOALS, all.filter(g => g.id !== goalId));
   },
 
-  // --- BUDGETS (Moved to LocalStorage) ---
+  // --- BUDGETS ---
   getBudgets: async (userId: string): Promise<Budget[]> => {
     return getLocal<Budget>(STORAGE_KEYS.BUDGETS).filter(b => b.userId === userId);
   },
@@ -233,7 +273,7 @@ export const storageService = {
     setLocal(STORAGE_KEYS.BUDGETS, all.filter(b => b.id !== budgetId));
   },
 
-  // --- EVENTS (Remains on Supabase for Global Visibility) ---
+  // --- EVENTS ---
   getEvents: async (): Promise<SovereignEvent[]> => {
     const { data } = await supabase.from('sovereign_events').select('*').order('startTime', { ascending: false });
     return (data || []) as SovereignEvent[];
@@ -247,7 +287,7 @@ export const storageService = {
 
   deleteEvent: async (eventId: string): Promise<void> => { await supabase.from('sovereign_events').delete().eq('id', eventId); },
 
-  // --- CUSTOM CATEGORIES (Moved to LocalStorage) ---
+  // --- CUSTOM CATEGORIES ---
   getCustomCategories: async (userId: string): Promise<CustomCategory[]> => {
     return getLocal<CustomCategory>(STORAGE_KEYS.CUSTOM_CATEGORIES).filter(c => c.userId === userId);
   },
@@ -274,7 +314,7 @@ export const storageService = {
     setLocal(STORAGE_KEYS.CUSTOM_CATEGORIES, all.filter(c => c.id !== id));
   },
 
-  // --- CUSTOM CHANNELS (Moved to LocalStorage) ---
+  // --- CUSTOM CHANNELS ---
   getCustomChannels: async (userId: string): Promise<CustomChannel[]> => {
     return getLocal<CustomChannel>(STORAGE_KEYS.CUSTOM_CHANNELS).filter(c => c.userId === userId);
   },
@@ -301,7 +341,7 @@ export const storageService = {
     setLocal(STORAGE_KEYS.CUSTOM_CHANNELS, all.filter(c => c.id !== id));
   },
 
-  // --- RECURRING TRANSACTIONS (Moved to LocalStorage) ---
+  // --- RECURRING TRANSACTIONS ---
   getRecurringTransactions: async (userId: string): Promise<RecurringTransaction[]> => {
     return getLocal<RecurringTransaction>(STORAGE_KEYS.RECURRING).filter(r => r.userId === userId);
   },

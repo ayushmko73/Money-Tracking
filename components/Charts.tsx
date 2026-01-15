@@ -55,9 +55,9 @@ export const DailyTrend: React.FC<ChartProps> = ({ transactions }) => {
               color: '#ffffff',
               outline: 'none',
               boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)'
-            }}
-            itemStyle={{ color: '#ffffff', textTransform: 'uppercase', fontWeight: 900, fontSize: '10px' }}
-            labelStyle={{ color: '#94a3b8', fontWeight: 900, fontSize: '9px', marginBottom: '4px', textTransform: 'uppercase' }}
+            } as React.CSSProperties}
+            itemStyle={{ color: '#ffffff', textTransform: 'uppercase', fontWeight: 900, fontSize: '10px' } as React.CSSProperties}
+            labelStyle={{ color: '#94a3b8', fontWeight: 900, fontSize: '9px', marginBottom: '4px', textTransform: 'uppercase' } as React.CSSProperties}
           />
           <Area 
             type="monotone" 
@@ -120,8 +120,8 @@ export const CategoryPie: React.FC<ChartProps> = ({ transactions }) => {
               background: '#0f172a', 
               color: '#ffffff',
               boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)'
-            }}
-            itemStyle={{ color: '#ffffff', textTransform: 'uppercase', fontWeight: 900, fontSize: '10px' }}
+            } as React.CSSProperties}
+            itemStyle={{ color: '#ffffff', textTransform: 'uppercase', fontWeight: 900, fontSize: '10px' } as React.CSSProperties}
           />
         </PieChart>
       </ResponsiveContainer>
@@ -147,7 +147,7 @@ export const TopSpendingChart: React.FC<{ data: { category: string; amount: numb
             axisLine={false} 
             tickLine={false} 
             width={80}
-            tick={{ fontWeight: 900, fill: '#64748b' }}
+            tick={{ fontWeight: 900, fill: '#64748b' } as any}
           />
           <Tooltip 
             cursor={{ fill: 'transparent' }}
@@ -158,8 +158,8 @@ export const TopSpendingChart: React.FC<{ data: { category: string; amount: numb
               color: '#ffffff',
               outline: 'none',
               boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)'
-            }}
-            itemStyle={{ color: '#ffffff', textTransform: 'uppercase', fontWeight: 900, fontSize: '10px' }}
+            } as React.CSSProperties}
+            itemStyle={{ color: '#ffffff', textTransform: 'uppercase', fontWeight: 900, fontSize: '10px' } as React.CSSProperties}
             labelStyle={{ display: 'none' }}
           />
           <Bar 
@@ -179,7 +179,7 @@ export const TopSpendingChart: React.FC<{ data: { category: string; amount: numb
             <LabelList 
               dataKey="amount" 
               position="right" 
-              formatter={(val: any) => `₹${Number(val || 0).toLocaleString()}`} 
+              formatter={(val: any) => `₹${Number(val ?? 0).toLocaleString()}`} 
               fontSize={9} 
               fontWeight={900} 
               fill="#94a3b8" 

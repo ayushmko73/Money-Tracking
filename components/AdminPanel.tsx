@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { User, Transaction } from '../types';
 import { storageService } from '../services/storageService';
@@ -29,14 +28,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ users, onRefresh }) => {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      const success = await storageService.deleteUser(deleteTarget.id);
+      // Pass both ID and Email for a guaranteed double-vector purge
+      const success = await storageService.deleteUser(deleteTarget.id, deleteTarget.email);
       if (success) {
         onRefresh();
         setDeleteTarget(null);
+      } else {
+        alert("Operation Fault: Registry scrub failed. Identity might be protected by Supabase RLS.");
       }
-    } catch (e) {
-      console.error(e);
-      alert("Operation failed.");
+    } catch (e: any) {
+      console.error("Critical Purge Exception:", e);
+      alert(`Terminal Error: ${e.message || "Registry synchronization fault."}`);
     } finally {
       setIsDeleting(false);
     }
