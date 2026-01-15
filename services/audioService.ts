@@ -25,10 +25,12 @@ class AudioService {
 
   playClick() {
     this.init();
-    if (!this.ctx || !this.compressor) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const ctx = this.ctx;
+    const compressor = this.compressor;
+    if (!ctx || !compressor) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     
     osc.type = 'sine';
     osc.frequency.setValueAtTime(1200, now);
@@ -38,7 +40,7 @@ class AudioService {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
     
     osc.connect(gain);
-    gain.connect(this.compressor);
+    gain.connect(compressor);
     
     osc.start();
     osc.stop(now + 0.03);
@@ -46,10 +48,12 @@ class AudioService {
 
   playPop() {
     this.init();
-    if (!this.ctx || !this.compressor) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const ctx = this.ctx;
+    const compressor = this.compressor;
+    if (!ctx || !compressor) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(400, now);
@@ -59,7 +63,7 @@ class AudioService {
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
     
     osc.connect(gain);
-    gain.connect(this.compressor);
+    gain.connect(compressor);
     
     osc.start();
     osc.stop(now + 0.1);
@@ -67,19 +71,21 @@ class AudioService {
 
   playSuccess() {
     this.init();
-    if (!this.ctx || !this.compressor) return;
-    const now = this.ctx.currentTime;
+    const ctx = this.ctx;
+    const compressor = this.compressor;
+    if (!ctx || !compressor) return;
+    const now = ctx.currentTime;
     const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
     notes.forEach((freq, i) => {
-      if (!this.ctx || !this.compressor) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
+      if (!ctx || !compressor) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, now + i * 0.05);
       gain.gain.setValueAtTime(0.05, now + i * 0.05);
       gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.05 + 0.2);
       osc.connect(gain);
-      gain.connect(this.compressor);
+      gain.connect(compressor);
       osc.start(now + i * 0.05);
       osc.stop(now + i * 0.05 + 0.2);
     });
@@ -87,11 +93,13 @@ class AudioService {
 
   playCoin() {
     this.init();
-    if (!this.ctx || !this.compressor) return;
-    const now = this.ctx.currentTime;
-    const osc1 = this.ctx.createOscillator();
-    const osc2 = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
+    const ctx = this.ctx;
+    const compressor = this.compressor;
+    if (!ctx || !compressor) return;
+    const now = ctx.currentTime;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
     
     osc1.type = 'sine';
     osc1.frequency.setValueAtTime(987.77, now); // B5
@@ -103,7 +111,7 @@ class AudioService {
     
     osc1.connect(gain);
     osc2.connect(gain);
-    gain.connect(this.compressor);
+    gain.connect(compressor);
     
     osc1.start();
     osc2.start();
@@ -113,14 +121,16 @@ class AudioService {
 
   playVictory() {
     this.init();
-    if (!this.ctx || !this.compressor) return;
-    const now = this.ctx.currentTime;
+    const ctx = this.ctx;
+    const compressor = this.compressor;
+    if (!ctx || !compressor) return;
+    const now = ctx.currentTime;
     const chords = [261.63, 329.63, 392.00, 523.25]; // C Major Chord
     chords.forEach((freq) => {
-      if (!this.ctx || !this.compressor) return;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      const filter = this.ctx.createBiquadFilter();
+      if (!ctx || !compressor) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
       
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(freq, now);
@@ -135,7 +145,7 @@ class AudioService {
       
       osc.connect(filter);
       filter.connect(gain);
-      gain.connect(this.compressor);
+      gain.connect(compressor);
       
       osc.start(now);
       osc.stop(now + 1.5);
@@ -144,7 +154,9 @@ class AudioService {
 
   toggleBGM() {
     this.init();
-    if (!this.ctx || !this.compressor) return false;
+    const ctx = this.ctx;
+    const compressor = this.compressor;
+    if (!ctx || !compressor) return false;
 
     if (this.isBgmPlaying) {
       this.stopBGM();
@@ -152,40 +164,42 @@ class AudioService {
     }
 
     this.isBgmPlaying = true;
-    this.bgmGain = this.ctx.createGain();
-    this.bgmGain.gain.setValueAtTime(0, this.ctx.currentTime);
-    this.bgmGain.gain.linearRampToValueAtTime(0.4, this.ctx.currentTime + 4);
-    this.bgmGain.connect(this.compressor);
+    this.bgmGain = ctx.createGain();
+    this.bgmGain.gain.setValueAtTime(0, ctx.currentTime);
+    this.bgmGain.gain.linearRampToValueAtTime(0.4, ctx.currentTime + 4);
+    this.bgmGain.connect(compressor);
 
     // Deep Sub Kick
     const startPulse = () => {
-      if (!this.ctx || !this.bgmGain) return;
-      const kickOsc = this.ctx.createOscillator();
-      const kickGain = this.ctx.createGain();
+      const currentCtx = this.ctx;
+      const currentBgmGain = this.bgmGain;
+      if (!currentCtx || !currentBgmGain) return;
+      const kickOsc = currentCtx.createOscillator();
+      const kickGain = currentCtx.createGain();
       kickOsc.type = 'sine';
-      kickOsc.frequency.setValueAtTime(55, this.ctx.currentTime);
-      kickOsc.frequency.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.4);
-      kickGain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-      kickGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.4);
+      kickOsc.frequency.setValueAtTime(55, currentCtx.currentTime);
+      kickOsc.frequency.exponentialRampToValueAtTime(0.01, currentCtx.currentTime + 0.4);
+      kickGain.gain.setValueAtTime(0.12, currentCtx.currentTime);
+      kickGain.gain.exponentialRampToValueAtTime(0.001, currentCtx.currentTime + 0.4);
       kickOsc.connect(kickGain);
-      kickGain.connect(this.bgmGain);
+      kickGain.connect(currentBgmGain);
       kickOsc.start();
-      kickOsc.stop(this.ctx.currentTime + 0.4);
+      kickOsc.stop(currentCtx.currentTime + 0.4);
     };
 
     // Warm Lo-fi Pad
-    const padOsc = this.ctx.createOscillator();
-    const padFilter = this.ctx.createBiquadFilter();
+    const padOsc = ctx.createOscillator();
+    const padFilter = ctx.createBiquadFilter();
     padOsc.type = 'triangle';
-    padOsc.frequency.setValueAtTime(130.81, this.ctx.currentTime); // C3
+    padOsc.frequency.setValueAtTime(130.81, ctx.currentTime); // C3
     padFilter.type = 'lowpass';
-    padFilter.frequency.setValueAtTime(400, this.ctx.currentTime);
-    padFilter.Q.setValueAtTime(8, this.ctx.currentTime);
+    padFilter.frequency.setValueAtTime(400, ctx.currentTime);
+    padFilter.Q.setValueAtTime(8, ctx.currentTime);
     
-    const lfo = this.ctx.createOscillator();
-    const lfoGain = this.ctx.createGain();
-    lfo.frequency.setValueAtTime(0.2, this.ctx.currentTime);
-    lfoGain.gain.setValueAtTime(150, this.ctx.currentTime);
+    const lfo = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+    lfo.frequency.setValueAtTime(0.2, ctx.currentTime);
+    lfoGain.gain.setValueAtTime(150, ctx.currentTime);
     lfo.connect(lfoGain);
     lfoGain.connect(padFilter.frequency);
     
@@ -196,17 +210,19 @@ class AudioService {
     
     // Lo-fi Ticker
     const ticker = (vol: number) => {
-      if (!this.ctx || !this.bgmGain) return;
-      const tOsc = this.ctx.createOscillator();
-      const tGain = this.ctx.createGain();
+      const currentCtx = this.ctx;
+      const currentBgmGain = this.bgmGain;
+      if (!currentCtx || !currentBgmGain) return;
+      const tOsc = currentCtx.createOscillator();
+      const tGain = currentCtx.createGain();
       tOsc.type = 'square';
-      tOsc.frequency.setValueAtTime(2000, this.ctx.currentTime);
-      tGain.gain.setValueAtTime(vol, this.ctx.currentTime);
-      tGain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.02);
+      tOsc.frequency.setValueAtTime(2000, currentCtx.currentTime);
+      tGain.gain.setValueAtTime(vol, currentCtx.currentTime);
+      tGain.gain.exponentialRampToValueAtTime(0.0001, currentCtx.currentTime + 0.02);
       tOsc.connect(tGain);
-      tGain.connect(this.bgmGain);
+      tGain.connect(currentBgmGain);
       tOsc.start();
-      tOsc.stop(this.ctx.currentTime + 0.02);
+      tOsc.stop(currentCtx.currentTime + 0.02);
     };
 
     let step = 0;
@@ -223,9 +239,11 @@ class AudioService {
 
   private stopBGM() {
     if (this.sequenceInterval) clearInterval(this.sequenceInterval);
-    if (this.bgmGain) {
-      if (this.ctx) {
-        this.bgmGain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 2);
+    const bgmGain = this.bgmGain;
+    const ctx = this.ctx;
+    if (bgmGain) {
+      if (ctx) {
+        bgmGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 2);
       }
       setTimeout(() => {
         this.bgmOscs.forEach(o => { try { (o as OscillatorNode).stop(); } catch(e) {} });

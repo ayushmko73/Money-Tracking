@@ -179,7 +179,7 @@ export const TopSpendingChart: React.FC<{ data: { category: string; amount: numb
             <LabelList 
               dataKey="amount" 
               position="right" 
-              formatter={(val: any) => `₹${Number(val).toLocaleString()}`} 
+              formatter={(val: any) => `₹${Number(val || 0).toLocaleString()}`} 
               fontSize={9} 
               fontWeight={900} 
               fill="#94a3b8" 
