@@ -106,7 +106,7 @@ const Auth: React.FC<{ onLogin: (user: User) => void }> = ({ onLogin }) => {
     <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4 font-['Inter'] relative overflow-hidden">
       <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-[120px] -mr-48 -mt-48"></div>
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-600/10 rounded-full blur-[120px] -ml-48 -mb-48"></div>
-      <div className="w-full max-w-md bg-white rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-12 border border-slate-100 relative z-10">
+      <div className="w-full max-md bg-white rounded-[3rem] shadow-2xl overflow-hidden p-8 md:p-12 border border-slate-100 relative z-10">
         <div className="text-center mb-10">
           <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl transform rotate-3">
             <i className="fas fa-shield-halved text-white text-2xl"></i>
@@ -223,7 +223,8 @@ const App: React.FC = () => {
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [initialCategory, setInitialCategory] = useState<string | undefined>(undefined);
   const [initialType, setInitialType] = useState<TransactionType | undefined>(undefined);
-  const [isBgmOn, setIsBgmOn] = useState(false);
+  // DEFAULT ON: Initializing to true
+  const [isBgmOn, setIsBgmOn] = useState(true);
   
   const isAdmin = currentUser?.email === ADMIN_EMAIL;
 
@@ -250,7 +251,20 @@ const App: React.FC = () => {
     });
   }, []);
 
-  useEffect(() => { if (currentUser) refreshData(); }, [currentUser?.id]);
+  useEffect(() => { 
+    if (currentUser) {
+      refreshData();
+      // Auto-start BGM if enabled
+      if (isBgmOn) {
+        // Small delay to ensure any user interaction (like Login click) has registered
+        // so the AudioContext can start successfully.
+        const timer = setTimeout(() => {
+          audioService.toggleBGM(true); // Passing true to ensure it starts, not just toggle
+        }, 800);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentUser?.id]);
 
   const handleEditRequest = (tx: Transaction) => {
     audioService.playClick();

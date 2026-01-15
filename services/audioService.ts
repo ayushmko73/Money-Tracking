@@ -156,15 +156,19 @@ class AudioService {
     });
   }
 
-  toggleBGM() {
+  toggleBGM(forceStart: boolean = false) {
     this.init();
     const ctx = this.ctx;
     const compressor = this.compressor;
     if (!ctx || !compressor) return false;
 
-    if (this.isBgmPlaying) {
+    if (this.isBgmPlaying && !forceStart) {
       this.stopBGM();
       return false;
+    }
+    
+    if (this.isBgmPlaying && forceStart) {
+      return true; // Already playing
     }
 
     this.isBgmPlaying = true;
@@ -174,7 +178,6 @@ class AudioService {
     this.bgmGain.connect(compressor);
 
     // 1. ZEN BREATH PAD
-    // Deep, evolving harmonic layer
     const pad1 = ctx.createOscillator();
     const pad2 = ctx.createOscillator();
     const padFilter = ctx.createBiquadFilter();
@@ -183,7 +186,7 @@ class AudioService {
     pad1.type = 'sine';
     pad1.frequency.setValueAtTime(130.81, ctx.currentTime); // C3
     pad2.type = 'sine';
-    pad2.frequency.setValueAtTime(131.2, ctx.currentTime); // Slightly detuned C3
+    pad2.frequency.setValueAtTime(131.2, ctx.currentTime); // Detuned C3
 
     padFilter.type = 'lowpass';
     padFilter.frequency.setValueAtTime(300, ctx.currentTime);
@@ -191,7 +194,7 @@ class AudioService {
 
     const padLFO = ctx.createOscillator();
     const padLFOGain = ctx.createGain();
-    padLFO.frequency.setValueAtTime(0.1, ctx.currentTime); // Very slow 10s cycle
+    padLFO.frequency.setValueAtTime(0.1, ctx.currentTime); 
     padLFOGain.gain.setValueAtTime(100, ctx.currentTime);
     padLFO.connect(padLFOGain);
     padLFOGain.connect(padFilter.frequency);
@@ -208,7 +211,6 @@ class AudioService {
     padLFO.start();
 
     // 2. ZEN SUB PULSE
-    // Anchoring but soft
     const startPulse = () => {
       if (!this.ctx || !this.bgmGain) return;
       const osc = this.ctx.createOscillator();
@@ -225,12 +227,11 @@ class AudioService {
     };
 
     // 3. ETHEREAL SPARKLES
-    // Random high-freq droplets for concentration
     const playSparkle = () => {
       if (!this.ctx || !this.bgmGain) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      const freqs = [1046.50, 1174.66, 1318.51, 1567.98, 1760.00]; // Pentatonic C
+      const freqs = [1046.50, 1174.66, 1318.51, 1567.98, 1760.00]; 
       const freq = freqs[Math.floor(Math.random() * freqs.length)];
       
       osc.type = 'sine';
@@ -248,7 +249,7 @@ class AudioService {
     let tick = 0;
     this.sequenceInterval = window.setInterval(() => {
       if (tick % 16 === 0) startPulse();
-      if (Math.random() > 0.8) playSparkle(); // Random concentration sparkles
+      if (Math.random() > 0.8) playSparkle(); 
       tick = (tick + 1) % 64;
     }, 500);
 
